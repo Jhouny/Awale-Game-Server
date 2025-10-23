@@ -14,5 +14,6 @@ typedef struct Awale {
 void initAwale(Awale* game);
 void copyAwale(const Awale* src, Awale* dest);
 void printBoard(Awale* game);
+int getHashCode(Awale* game);
 
 #endif

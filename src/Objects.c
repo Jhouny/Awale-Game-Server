@@ -36,3 +36,14 @@ void printBoard(Awale* game) {
         printf(" | Score: %d\n", game->scores[i]);
     }
 }
+
+// Function to generate the hash code for the current game state
+int getHashCode(Awale* game) {
+    int hash = 0;
+    for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            hash = hash * 31 + game->board[i][j];
+        }
+    }
+    return hash;
+}

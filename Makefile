@@ -1,13 +1,13 @@
 # --- Compiler Configuration ---
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99
+CFLAGS = -Wall -Wextra -std=c17 -I./src
 
 # --- Project Configuration ---
 TARGET = awale  # The name of the final executable
 # List all source files (.c files) in the 'src' directory
 # Assuming all .h files listed (Client, GameEngine, Objects, Server, CSVHandler)
 # have corresponding .c files that need to be compiled.
-SRCS = src/Main.c src/Objects.c
+SRCS = src/Main.c src/GameEngine.c src/Objects.c src/Set.c
 # Automatically generate the list of object files (.o) from the source files
 OBJS = $(SRCS:.c=.o)
 
