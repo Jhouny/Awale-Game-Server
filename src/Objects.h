@@ -13,7 +13,6 @@ typedef struct Awale {
 
 void initAwale(Awale* game);
 void copyAwale(const Awale* src, Awale* dest);
-bool playMove(Awale* game, int player, int pit, bool recursive);
 void printBoard(Awale* game);
 
 #endif
