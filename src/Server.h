@@ -14,9 +14,9 @@
 #include <signal.h>
 #include <string.h>
 
-
-int main(int argc, char** argv )
-{ char datas[] = "hello\n";
+int main(int argc, char **argv)
+{
+  char datas[] = "hello\n";
   int    sockfd,newsockfd,chilpid,ok,nleft,nbwriten;
   char c;
   struct sockaddr_in cli_addr,serv_addr;
@@ -38,12 +38,16 @@ int main(int argc, char** argv )
 
   /* effecture le bind */
   if (bind(sockfd,(struct sockaddr*)&serv_addr,sizeof(serv_addr))<0)
-     {printf ("impossible de faire le bind\n");exit(1);}
+  {
+    printf("impossible de faire le bind\n");
+    exit(1);
+  }
 
   /* petit initialisation */
-  listen(sockfd,1);
+  listen(sockfd, 1);
 
-  while (1) { 
+  while (1)
+  {
     // Make the parent process allow multiple connections
     // by forking a child process to handle each connection
     // and closing the child socket in the parent process
@@ -51,37 +55,43 @@ int main(int argc, char** argv )
     /* attend la connection d'un client */
     clilen = sizeof(cli_addr);
     newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-    if (newsockfd < 0) {
+    if (newsockfd < 0)
+    {
       printf("accept error\n");
       exit(0);
     }
     printf("connection accepted\n");
-    
-    if (fork() == 0) { // Child process
+
+    if (fork() == 0)
+    { // Child process
       close(sockfd);
-      
+
       char full_buffer[256];
       bzero(full_buffer, 256);
       int total_bytes = 0;
 
       // Handle client connection
-      while (1) {
+      while (1)
+      {
         int n;
         char buffer[256];
         bzero(buffer, 256);
         n = read(newsockfd, buffer, 255);
-        if (n <= 0) {
+        if (n <= 0)
+        {
           close(newsockfd);
           exit(0);
         }
         // Read until newline or EOF
-        if (total_bytes + n < sizeof(full_buffer)) {
+        if (total_bytes + n < sizeof(full_buffer))
+        {
           memcpy(full_buffer + total_bytes, buffer, n);
           total_bytes += n;
           full_buffer[total_bytes] = '\0';
         }
 
-        if (strchr(buffer, '\n') || strchr(buffer, '\r')) {
+        if (strchr(buffer, '\n') || strchr(buffer, '\r'))
+        {
           printf("Received %d bytes: %s\n", n, full_buffer);
           n = write(newsockfd, full_buffer, total_bytes);
           if (n < 0)
@@ -94,15 +104,16 @@ int main(int argc, char** argv )
       close(newsockfd);
       exit(0);
     }
-    else { // Parent process
+    else
+    { // Parent process
       signal(SIGCHLD, SIG_IGN); // Prevent zombie processes
       close(newsockfd);
     }
-   }
-      
-   /*  attention il s'agit d'une boucle infinie 
-    *  le socket nn'est jamais ferme !
-    */
+  }
 
-   return 1;
- }
+  /*  attention il s'agit d'une boucle infinie
+   *  le socket n'est jamais ferme !
+   */
+
+  return 1;
+}
