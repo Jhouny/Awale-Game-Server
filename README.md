@@ -8,6 +8,7 @@ The goal of this project is to implement an Awalé game server. The aim is to ha
     - [X] Count points
     - [ ] Save a game
     - [X] Print the board state
+
  - [ ] Design a client/server application.
     - [ ] Each client registers with a username.
     - [ ] Each client can request from the server the list of online usernames.
@@ -20,7 +21,8 @@ The goal of this project is to implement an Awalé game server. The aim is to ha
     - [ ] Implement a chat option where players can exchange messages to chat (both inside and outside a game).
     - [ ] Allow a player to write a bio (e.g. 10 ASCII lines) to introduce themselves $\to$ The server should be able to display the bio of a given username.
     - [ ] Add a private mode where a player can limit the list of spectators to a list of friends.
-    - [ ] Add the ability to save played games so they can be reviewed later.
+    - [ ] Add the ability to review saved games.
+
 - Extra features (optional):
     - [ ] Free to your imagination, player rankings (see Elo rating)
     - [ ] Tournament organization, adapting it to another game, etc.
