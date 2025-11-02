@@ -16,4 +16,10 @@ void copyAwale(const Awale* src, Awale* dest);
 void printBoard(Awale* game);
 int getHashCode(Awale* game);
 
+typedef struct Move {
+    // Represents a move in the Awale game
+    int player; // 0 or 1
+    int pit;    // 0 to 5
+} Move;
+
 #endif

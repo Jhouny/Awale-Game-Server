@@ -10,6 +10,7 @@ The goal of this project is to implement an Awalé game server. The aim is to ha
     - [X] Print the board state
 
  - [ ] Design a client/server application.
+    - Use a structure or enum to list all possible server commands.
     - [ ] Each client registers with a username.
     - [ ] Each client can request from the server the list of online usernames.
     - [ ] Client A can challenge client B. 
