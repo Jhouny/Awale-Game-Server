@@ -1,7 +1,7 @@
 #ifndef _GAMEENGINE_H_
 #define _GAMEENGINE_H_
 
-#include "stdafx.h"
+#include "common.h"
 #include "Objects.h"
 #include "Set.h"
 

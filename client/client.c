@@ -1,16 +1,4 @@
-/* Client pour les sockets
- *    socket_client ip_server port
- */
-
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <netdb.h>
+#include "client.h"
 
 int main(int argc, char** argv ) {
   int sockfd, newsockfd, clilen, chilpid, ok, nleft, nbwriten;
@@ -33,7 +21,7 @@ int main(int argc, char** argv ) {
 
   struct hostent *he = gethostbyname(argv[1]);
   if (he == NULL) {
-      herror("gethostbyname");
+      perror("gethostbyname");
       exit(1);
   }
   memcpy(&serv_addr.sin_addr, he->h_addr, he->h_length);

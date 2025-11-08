@@ -13,7 +13,7 @@ The goal of this project is to implement an Awalé game server. The aim is to ha
     - Use a structure or enum to list all possible server commands.
     - [ ] Each client registers with a username.
     - [ ] Each client can request from the server the list of online usernames.
-    - [ ] Client A can challenge client B. 
+    - [ ] Client A can challenge client B.
     - [ ] A Client can accept or refuse a challenge.
     - [ ] When a match is created between A and B, the server randomly decides who starts.
     - [ ] The server verifies the legality of moves.
@@ -21,7 +21,7 @@ The goal of this project is to implement an Awalé game server. The aim is to ha
     - [ ] Add a feature for "observer" mode, where the server sends the board and score to C who observes the game between A and B.
     - [ ] Implement a chat option where players can exchange messages to chat (both inside and outside a game).
     - [ ] Allow a player to write a bio (e.g. 10 ASCII lines) to introduce themselves $\to$ The server should be able to display the bio of a given username.
-    - [ ] Add a private mode where a player can limit the list of spectators to a list of friends.
+    - [ ] Add a private mode where a player can limit the list of spectators to a list of friends. Union of friends of both players.
     - [ ] Add the ability to review saved games.
 
 - Extra features (optional):

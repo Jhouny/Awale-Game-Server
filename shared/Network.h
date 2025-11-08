@@ -1,7 +1,7 @@
 #ifndef _NETWORK_H_
 #define _NETWORK_H_
 
-#include "stdafx.h"
+#include "common.h"
 #include "Objects.h"
 
 typedef struct Awale_Network {

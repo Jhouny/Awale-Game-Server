@@ -1,14 +1,14 @@
 #ifndef _OBJECTS_H_
 #define _OBJECTS_H_
 
-#include "stdafx.h"
+#include "common.h"
 
 typedef struct Awale {
     // Represents the state of an Awale game
-    int board[2][6]; // 2 players, 6 pits each
-    int scores[2];   // Scores for each player
+    uint8_t board[2][6]; // 2 players, 6 pits each
+    uint8_t scores[2];   // Scores for each player
     bool gameOver;
-    int winner; // -1 if no winner, 0 or 1 for players
+    int8_t winner; // -1 if no winner, 0 or 1 for players
 } Awale;
 
 void initAwale(Awale* game);

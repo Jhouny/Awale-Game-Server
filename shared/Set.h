@@ -1,7 +1,7 @@
 #ifndef _SET_H_
 #define _SET_H_
 
-#include "stdafx.h"
+#include "common.h"
 
 // Represents a general set data structure for various uses 
 typedef struct Set {
