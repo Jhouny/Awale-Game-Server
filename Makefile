@@ -1,6 +1,6 @@
 # --- Compiler Configuration ---
 CC = gcc
-CFLAGS = -Wall -Wextra -g -std=c17 -Ishared
+CFLAGS = -Wall -Wextra -g -std=c17 -Ishared -D_POSIX_C_SOURCE=200112L
 
 # --- Build Directory ---
 BUILD_DIR = build
