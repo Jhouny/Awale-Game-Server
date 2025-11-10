@@ -14,5 +14,7 @@ int main() {
 	insert(tb2, "a Key", "one value");
 
 	printf("Database size: %d\nTable name: %s\nEntry: %s - %s\n", myDB->size, tab->name, tab->entries[0]->key, tab->entries[0]->value);
-	return 1;
+
+	delete_database(myDB);
+	return 0;
 }
