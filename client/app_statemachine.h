@@ -1,5 +1,5 @@
-#ifndef CLIENT_TYPE_H
-#define CLIENT_TYPE_H
+#ifndef APP_STATEMACHINE_H
+#define APP_STATEMACHINE_H
 
 // Client state machine
 typedef enum {
