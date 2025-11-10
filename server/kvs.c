@@ -6,6 +6,13 @@ entry* create_entry() {
 	return e;
 }
 
+int delete_entry(entry* e) {
+	if (e == NULL)
+		return 0;
+	free(e);
+	return 1;
+}
+
 table* create_table() {
 	table* t = (table*) malloc(sizeof(table));
 	t->size = 20;
@@ -17,8 +24,19 @@ table* create_table() {
 	return t;
 }
 
+int delete_table(table* t) {
+	if (t == NULL)
+		return 0;
+	for (int i = 0; i < t->size; i++) {
+		delete_entry(t->entries[i]);
+	}
+	free(t->entries);
+	free(t);
+	return 1;
+}
+
 void set_table_name(table* t, const char* name) {
-	memcpy(t->name, name, 32);
+	strncpy(t->name, name, 31);
 	t->name[31] = '\0';
 }
 
@@ -49,19 +67,27 @@ int insert(table* t, const char* key, const char* value) {
 	}
 	
 	// Insert new entry
-	strcpy(t->entries[found_index]->key, key);
-	strcpy(t->entries[found_index]->value, value);
+	strncpy(t->entries[found_index]->key, key, MAX_KEY_LEN - 1);
+	t->entries[found_index]->key[MAX_KEY_LEN - 1] = '\0';
+	strncpy(t->entries[found_index]->value, value, MAX_VALUE_LEN - 1);
+	t->entries[found_index]->value[MAX_VALUE_LEN - 1] = '\0';
 	t->entries[found_index]->free = 0;
 
 	return 1;
 }
 
 int insert_entry(table* t, const entry* e) {
-	char key[MAX_KEY_LEN];
-	char value[MAX_VALUE_LEN];
-	strcpy(key, e->key);
-	strcpy(value, e->value);
-	return insert(t, key, value);
+	return insert(t, e->key, e->value);
+}
+
+int remove_entry(table* t, const char* key) {
+	for (int i = 0; i < t->size; i++) {
+		if (!t->entries[i]->free && strcmp(t->entries[i]->key, key) == 0) {
+			t->entries[i]->free = 1; // Mark as free
+			return 1;
+		}
+	}
+	return 0; // Not found
 }
 
 char* get(const table* t, const char* key) {
@@ -69,5 +95,5 @@ char* get(const table* t, const char* key) {
 		if (!t->entries[i]->free && strcmp(t->entries[i]->key, key) == 0)
 			return t->entries[i]->value;
 	}
-	return '\0';
+	return NULL;
 }

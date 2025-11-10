@@ -7,6 +7,17 @@ database* create_database() {
 	return d;
 }
 
+int delete_database(database* d) {
+	if (d == NULL)
+		return 0;
+	for (int i = 0; i < d->size; i++) {
+		delete_table(d->tables[i]);
+	}
+	free(d->tables);
+	free(d);
+	return 1;
+}
+
 table* add_table(database* d, const char* name) {
 	d->size += 1;
 	d->tables = (table**) realloc(d->tables, sizeof(table*) * d->size);

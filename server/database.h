@@ -12,6 +12,7 @@ typedef struct database {
 } database;
 
 database* create_database();
+int delete_database(database* d);
 table* add_table(database* d, const char* name);
 const table* get_table(const database* d, const char* name);
 

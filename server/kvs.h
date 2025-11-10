@@ -16,6 +16,7 @@ typedef struct kv {
 } entry;
 
 entry* create_entry();
+int delete_entry(entry* e);
 
 /**
  * \brief This struct defines a Key-Value storage unit. It corresponds to a table on the database. 
@@ -27,9 +28,11 @@ typedef struct kvs {
 } table;
 
 table* create_table();
+int delete_table(table* t);
 void set_table_name(table* t, const char* name);
 int insert(table* t, const char* key, const char* value);
 int insert_entry(table* t, const entry* e);
+int remove_entry(table* t, const char* key);
 char* get(const table* t, const char* key);
 
 #endif
