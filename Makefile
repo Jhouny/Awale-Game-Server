@@ -27,8 +27,12 @@ SERVER_EXEC = $(BIN_DIR)/server
 # --- Build Rules ---
 
 # Default target: builds the executable
-.PHONY: all
+.PHONY: all client server
 all: $(CLIENT_EXEC) $(SERVER_EXEC)
+
+client: $(CLIENT_EXEC)
+
+server: $(SERVER_EXEC)
 
 # Rule to link the client executable
 $(CLIENT_EXEC): $(CLIENT_OBJS) | $(BIN_DIR)
