@@ -46,7 +46,7 @@ int main(int argc, char** argv ) {
     printf("Connection successful.\n");
 
     // --- NEW LOGIC: Start the state/render loop ---
-    client_state_loop(sockfd);
+    renderer_state_loop(sockfd);
     
     // Close socket on exit
     close(sockfd);
