@@ -53,7 +53,7 @@ void render_client_state(const ClientData* data) {
             printf("Type 'back' to return to home.\n");
             break;
 
-        case STATE_EN_JEU: // Corresponds to IN_GAME
+        case STATE_IN_GAME: // Corresponds to IN_GAME
             printf("IN GAME\n\n");
             // Awale board rendering
             printf("Awale board display...\n");
