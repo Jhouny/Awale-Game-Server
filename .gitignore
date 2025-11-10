@@ -55,3 +55,7 @@ dkms.conf
 *.dwo
 
 build/*
+bin/*
+
+# Backup files
+*.bckp
