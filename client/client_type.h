@@ -1,3 +1,6 @@
+#ifndef CLIENT_TYPE_H
+#define CLIENT_TYPE_H
+
 // Client state machine
 typedef enum {
     STATE_LOGIN,
@@ -22,3 +25,5 @@ typedef struct {
     ClientState current_state;
     int incoming_challenges_count;
 } ClientData;
+
+#endif
