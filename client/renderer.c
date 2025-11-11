@@ -33,7 +33,7 @@ void render_client_state(const ClientData* data) {
             printf("  4. Review saved games\n");
             
             // Conditional display of the badge (1) in yellow/bold
-            printf("  5. VIEW CHALLENGES %s\n", (challenges > 0) ? 
+            printf("  5. View challenges %s\n", (challenges > 0) ? 
                    "(\033[33m\033[1m%d incoming\033[0m)" : 
                    "");
 
@@ -156,7 +156,7 @@ void renderer_state_loop(int sockfd) {
     
     printf("Client running. Type 'exit' to quit.\n");
 
-    ClientState previous_state = client_data.current_state; // mémorise état précédent
+    ClientState previous_state = client_data.current_state; // memorise previous state
    int need_refresh = 1;
 
     while (client_data.current_state != STATE_EXIT) {
@@ -186,35 +186,62 @@ void renderer_state_loop(int sockfd) {
             perror("Select error");
             break;
         }
-        /*A DECOMMENTER APRES*/
+
         // 4. Handling User Input (STDIN)
-        /*if (FD_ISSET(STDIN_FILENO, &read_fds)) {
+        if (FD_ISSET(STDIN_FILENO, &read_fds)) {
             char input[256];
             if (fgets(input, sizeof(input), stdin) != NULL) {
                 input[strcspn(input, "\n")] = 0; 
                 
-                // Input processing logic:
-                if (strcmp(input, "exit") == 0) {
+                // Commande de sortie
+                if (strcmp(input, "exit") == 0 || strcmp(input, "9") == 0) {
                     client_data.current_state = STATE_EXIT;
-                } else if (client_data.current_state == STATE_HOME) {
-                    if (strcmp(input, "5") == 0) {
+                }
+                // --- HOME menu commands ---
+                else if (client_data.current_state == STATE_HOME) {
+                    if (strcmp(input, "1") == 0) {
+                        client_data.current_state = STATE_CHALLENGE;
+                    } 
+                    else if (strcmp(input, "2") == 0) {
+                        client_data.current_state = STATE_WRITE_BIO;
+                    } 
+                    else if (strcmp(input, "3") == 0) {
+                        client_data.current_state = STATE_CHOOSE_GAME_SPECTATE;
+                    } 
+                    else if (strcmp(input, "4") == 0) {
+                        client_data.current_state = STATE_CHOOSE_GAME_TO_REVIEW;
+                    } 
+                    else if (strcmp(input, "5") == 0) {
                         client_data.current_state = STATE_VIEW_CHALLENGES;
+                    } 
+                    else if (strcmp(input, "6") == 0) {
+                        client_data.current_state = STATE_RETRIEVE_BIO;
+                    } 
+                    else if (strcmp(input, "7") == 0) {
+                        client_data.current_state = STATE_CHOOSE_CHAT;
+                    } 
+                    else if (strcmp(input, "8") == 0) {
+                        client_data.current_state = STATE_FRIENDS;
                     }
-                } else if (client_data.current_state == STATE_VIEW_CHALLENGES) {
+                }
+                // --- Back command from view challenges ---
+                else if (client_data.current_state == STATE_VIEW_CHALLENGES) {
                     if (strcmp(input, "back") == 0) {
-                        // Reset challenge counter after viewing them
-                        client_data.incoming_challenges_count = 0; 
+                        client_data.incoming_challenges_count = 0;
                         client_data.current_state = STATE_HOME;
                     }
                 }
-                // ... Add logic for other states and commands
+
+                // Force rafraîchissement après saisie
+                need_refresh = 1;
             }
-        }*/
+        }
+
 
         /*A COMMENTER APRES */
         // 4. Simulated socket behavior when no server is running
         if (sockfd != -1 && FD_ISSET(sockfd, &read_fds)) {
-            // 🔒 Skip socket reads if not connected (demo mode)
+            // Skip socket reads if not connected (demo mode)
             struct sockaddr_in addr;
             socklen_t len = sizeof(addr);
             int connected = getpeername(sockfd, (struct sockaddr *)&addr, &len);
@@ -271,15 +298,14 @@ void renderer_state_loop(int sockfd) {
                  client_data.incoming_challenges_count += (server_update_counter == 0) ? 0 : 1;
             }
             server_update_counter++;
-             need_refresh = 1;
         }
         if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-            // après avoir traité une commande utilisateur
+            // after testing user input
             need_refresh = 1;
         }
 
         if (FD_ISSET(sockfd, &read_fds)) {
-            // après avoir lu un message serveur
+            // after receiving server message
             need_refresh = 1;
         }
     }
