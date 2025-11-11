@@ -16,7 +16,8 @@ void render_client_state(const ClientData* data) {
     switch (data->current_state) {
         case STATE_LOGIN:
             printf("LOGIN\n\n");
-            printf("Enter your username and password...\n");
+            printf("Enter your username...\n");
+            printf("Enter your password...\n");
             break;
 
         case STATE_HOME:
@@ -53,13 +54,85 @@ void render_client_state(const ClientData* data) {
             }
             printf("Type 'back' to return to home.\n");
             break;
+        
+        case STATE_CHALLENGE:
+            printf("CHALLENGE MENU\n\n");
+            printf("Enter the username of the player you wish to challenge:\n");
+            printf("Or type 'back' to return to home.\n");
+            break;
+        
+        case STATE_WRITE_BIO:
+            printf("WRITE BIO\n\n");
+            printf("Enter your new bio below (single line):\n");
+            printf("Type 'cancel' to discard changes.\n");
+            break;
+
+        case STATE_CHOOSE_GAME_SPECTATE:
+            printf("CHOOSE GAME TO SPECTATE\n\n");
+            printf("List of active games:\n");
+            printf("Type 'select <id>' to spectate a game.\n");
+            printf("Type 'back' to return to home.\n");
+            break;  
+
+        case STATE_SPECTATING:
+        printf("SPECTATING GAME\n\n");
+        printf("You are now watching an ongoing Awale match.\n");
+        printf("  - Type 'back' to stop spectating.\n");
+        break;
 
         case STATE_IN_GAME: // Corresponds to IN_GAME
             printf("IN GAME\n\n");
             // Awale board rendering
             printf("Awale board display...\n");
             break;
+        
+            case STATE_CHOOSE_GAME_TO_REVIEW:
+        printf("CHOOSE GAME TO REVIEW\n\n");
+        printf("List of past games:\n");
+        printf("(simulated list)\n");
+        printf("Type 'review <id>' to see moves.\n");
+        printf("Type 'back' to return to home.\n");
+        break;
 
+        case STATE_REVIEWING:
+            printf("REVIEWING GAME\n\n");
+            printf("Use commands:\n");
+            printf("  - 'next' → go to next move\n");
+            printf("  - 'prev' → go back one move\n");
+            printf("  - 'exit' → return to home\n");
+            break;
+
+        case STATE_RETRIEVE_BIO:
+            printf("RETRIEVE BIO\n\n");
+            printf("Enter the username of the player whose bio you want to read:\n");
+            printf("Type 'back' to return to home.\n");
+            break;
+
+        case STATE_CHOOSE_CHAT:
+            printf("CHOOSE CHAT\n\n");
+            printf("Enter the username of the person you want to chat with:\n");
+            printf("Or type 'back' to return to home.\n");
+            break;
+
+        case STATE_CHATTING:
+            printf("CHATTING\n\n");
+            printf("You are now chatting with another user.\n");
+            printf("Type your messages directly.\n");
+            printf("Type 'back' to close the chat.\n");
+            break;
+
+        case STATE_FRIENDS:
+            printf("FRIENDS LIST\n\n");
+            printf("Here are your friends:\n");
+            printf("Commands:\n");
+            printf("  - 'add <username>' to add a friend\n");
+            printf("  - 'remove <username>' to remove a friend\n");
+            printf("  - 'back' to return to home\n");
+            break;
+
+        case STATE_EXIT:
+            printf("EXITING CLIENT...\n");
+            break;
         default:
             printf("UNDEFINED STATE\n\n");
             break;
