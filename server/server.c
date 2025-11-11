@@ -18,7 +18,21 @@ int main(int argc, char* argv[]) {
 
 	// Start server
 	printf("\nStarting server on port %s.\n", globals.port);
-
+	int socket_fd = setup_server();
+	if (socket_fd != -1) {
+		struct sockaddr* client_addr;	
+		socklen_t client_len = sizeof(client_addr);
+		while (1) {  // Server runs indefinitely
+			int client_socket_fd = accept(socket_fd, client_addr, &client_len);
+			if (client_socket_fd == -1) {
+				printf("Error accepting new connection.\n");
+				return 1;
+			}
+			printf("New connection accepted.\n");
+			
+			// Handle new connection here
+		}
+	}
 
 	// Free allocated database from memory
 	delete_database(db);
@@ -52,4 +66,36 @@ int parse_args(int argc, char* argv[]) {
 		}
 	}
 	return 1;
+}
+
+int setup_server() {
+	int socket_fd;
+	struct sockaddr_in server_addr;
+
+	// Open socket 
+	socket_fd = socket(AF_INET, SOCK_STREAM, 0)
+	if (socket_fd == -1) {
+		printf("Error opening socket.\n");
+		return -1;
+	}
+
+	// Zero-fill server_addr and apply properties
+	memset(&server_addr, 0, sizeof(server_addr));
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(atoi(globals.port));
+	server_addr.sin_addr.s_addr = INADDR_ANY;
+
+	// Bind socket to port and address. Must cast to expected type sockaddr_in --> sockaddr.
+	if (bind(socket_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+		printf("Error binding socket.\n");
+		return -1;
+	}
+
+	// Setup socket to listen (accept connections). Also set queue length of established sockets waiting to connect to 100.
+	if (listen(socket_fd, 100) == -1) {
+		printf("Error setting up socket to listen.\n");
+		return -1;
+	}
+
+	return socket_fd;
 }
