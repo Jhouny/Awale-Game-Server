@@ -33,9 +33,11 @@ void render_client_state(const ClientData* data) {
             printf("  4. Review saved games\n");
             
             // Conditional display of the badge (1) in yellow/bold
-            printf("  5. View challenges %s\n", (challenges > 0) ? 
-                   "(\033[33m\033[1m%d incoming\033[0m)" : 
-                   "");
+            printf("  5. View challenges");
+            if (challenges > 0) {
+                printf(" \033[33m\033[1m(%d incoming)\033[0m", challenges);
+            }
+            printf("\n");
 
             printf("  6. Retrieve Bio\n");
             printf("  7. Chat\n");
@@ -153,6 +155,7 @@ void renderer_state_loop(int sockfd) {
     
     // Counter to simulate server updates
     int server_update_counter = 0;
+    int show_notification = 0;
     
     printf("Client running. Type 'exit' to quit.\n");
 
@@ -165,22 +168,29 @@ void renderer_state_loop(int sockfd) {
             previous_state = client_data.current_state;
             need_refresh = 0;
         }
-        
+
+        if (show_notification) {
+                fflush(stdout);
+                show_notification = 0;
+            }
     
         // 2. Configuration for select()
         fd_set read_fds;
         FD_ZERO(&read_fds);
-        FD_SET(sockfd, &read_fds);       // Monitors server socket
+        /*A REMETTRE*/
+        /*FD_SET(sockfd, &read_fds);*/       // Monitors server socket
         FD_SET(STDIN_FILENO, &read_fds); // Monitors user input (terminal)
 
         // 3. Defining the Timeout (your 5-second refresh)
         struct timeval timeout;
         timeout.tv_sec = 5;
         timeout.tv_usec = 0;
-
-        int max_fd = (sockfd > STDIN_FILENO) ? sockfd : STDIN_FILENO;
+        /* A REMETTRE*/
+        /*int max_fd = (sockfd > STDIN_FILENO) ? sockfd : STDIN_FILENO;*/
         // select blocks until data arrives OR timeout is reached (5s)
-        int activity = select(max_fd + 1, &read_fds, NULL, NULL, &timeout);
+        /*int activity = select(max_fd + 1, &read_fds, NULL, NULL, &timeout);*/
+        int activity = select(STDIN_FILENO + 1, &read_fds, NULL, NULL, &timeout);
+
 
         if (activity < 0) {
             perror("Select error");
@@ -224,12 +234,13 @@ void renderer_state_loop(int sockfd) {
                         client_data.current_state = STATE_FRIENDS;
                     }
                 }
-                // --- Back command from view challenges ---
-                else if (client_data.current_state == STATE_VIEW_CHALLENGES) {
-                    if (strcmp(input, "back") == 0) {
+                 // --- Back command: return to HOME from any state ---
+                else if (strcmp(input, "back") == 0) {
+                    // Special handling for VIEW_CHALLENGES: reset counter
+                    if (client_data.current_state == STATE_VIEW_CHALLENGES) {
                         client_data.incoming_challenges_count = 0;
-                        client_data.current_state = STATE_HOME;
                     }
+                    client_data.current_state = STATE_HOME;
                 }
 
                 // Force rafraîchissement après saisie
@@ -289,24 +300,16 @@ void renderer_state_loop(int sockfd) {
         
         // 6. Handling Timeout (Simulated Refresh/Update)
         if (activity == 0) {
-            // The 5-second timeout has been reached.
-            // Rendering is called at the start of the loop, so it will refresh the screen.
-            
-            // SIMULATION OF NEW CHALLENGE (for testing the badge)
-            if (client_data.current_state == STATE_HOME && server_update_counter % 3 == 0) {
-                // Simulate receiving a challenge every 3 iterations (15 seconds)
-                 client_data.incoming_challenges_count += (server_update_counter == 0) ? 0 : 1;
-            }
-            server_update_counter++;
-        }
-        if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-            // after testing user input
-            need_refresh = 1;
-        }
 
-        if (FD_ISSET(sockfd, &read_fds)) {
-            // after receiving server message
-            need_refresh = 1;
+            server_update_counter++;
+                if (server_update_counter % 3 == 0) {
+                    client_data.incoming_challenges_count++;
+                    show_notification = 1; // Active le flag
+                    need_refresh = 1;
+                }
+            
+            
         }
+        usleep(50000);
     }
 }
