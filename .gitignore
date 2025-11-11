@@ -57,5 +57,8 @@ dkms.conf
 build/*
 bin/*
 
+# Database files
+*.db
+
 # Backup files
 *.bckp

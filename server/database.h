@@ -16,4 +16,7 @@ int delete_database(database* d);
 table* add_table(database* d, const char* name);
 const table* get_table(const database* d, const char* name);
 
+int save_database(const database* d, const char* filename);
+database* load_database(const char* filename);
+
 #endif // _DATABASE_H_

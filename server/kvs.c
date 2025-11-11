@@ -53,6 +53,8 @@ void set_table_name(table* t, const char* name) {
 int insert(table* t, const char* key, const char* value) {
 	if (t == NULL || key == NULL || value == NULL)
 		return 0;
+	if (strcmp(key, "\0") == 0)
+		return 0;
 
 	// Check if key already exists in table. If not, add it.
 	for (int i = 0; i < t->size; i++) {
