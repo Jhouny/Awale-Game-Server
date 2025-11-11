@@ -11,3 +11,21 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <signal.h>
+
+// Define global variables here
+#define DATABASE_FILE 			"database.db"
+#define DATABASE_BACKUP_FILE 	"database.db.bckp"
+#define DEFAULT_PORT			"3000"
+
+
+typedef struct Arguments {
+	char port[6];  // Max port number = 65,535
+	char db_file[4097];  // Max file path in Linux
+} Arguments;
+
+Arguments globals;
+
+/**
+ * \brief Function to parse the terminal arguments passed to the server
+ */
+int parse_args(int argc, char* argv[]);
