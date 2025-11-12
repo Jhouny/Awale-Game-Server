@@ -211,8 +211,8 @@ int main(int argc, char* argv[]) {
                     args[0] = malloc(251);
                     strncpy(args[0], username, 251);
                     args[1] = malloc(251);
-                    strncpy(args[0], password, 251);
-                    Command* cmd = createCommand("SIGN-UP", args, 2);
+                    strncpy(args[1], password, 251);
+                    Command* cmd = createCommand("LOGIN", args, 2);
                     int res = serialize_and_send_Command(socket_fd, cmd);
                     free(args[0]);
                     free(args[1]);
@@ -272,7 +272,7 @@ int main(int argc, char* argv[]) {
             strncpy(args[0], username, 251);
             args[1] = malloc(251);
             strncpy(args[0], password, 251);
-            Command* cmd = createCommand("SIGN-UP", args, 2);
+            Command* cmd = createCommand("SIGNUP", args, 2);
             int res = serialize_and_send_Command(socket_fd, cmd);
             free(args[0]);
             free(args[1]);
