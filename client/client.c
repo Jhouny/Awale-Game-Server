@@ -24,6 +24,8 @@ int main(int argc, char* argv[]) {
         printf("Usage: %s <IP> <PORT>\n", argv[0]);
         return 1;
     }
+    return NULL;
+}
 
     int socket_fd;
     struct addrinfo hints;
