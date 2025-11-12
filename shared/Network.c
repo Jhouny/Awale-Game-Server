@@ -108,7 +108,6 @@ Command* receive_and_deserialize_Command(int socket_fd) {
 	memset(cmd, 0, sizeof(Command));
 
 	size_t total_bytes_received = 0;
-	int arg_len;
 
 	printf("Receiving command from socket %d.\n", socket_fd);
 
@@ -146,7 +145,8 @@ Command* receive_and_deserialize_Command(int socket_fd) {
 		}
 		total_bytes_received += MAX_ARG_LEN;
 	}
-
+	
+	printf("Finished receiving command with: %d bytes\n", (int)total_bytes_received);
 	return cmd;
 }
 
