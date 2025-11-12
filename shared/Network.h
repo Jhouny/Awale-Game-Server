@@ -4,6 +4,11 @@
 #include "common.h"
 #include "Objects.h"
 
+
+#define MAX_ARG_LEN	250
+#define MAX_CMD_LEN	32
+
+
 typedef struct Awale_Network {
     // Represents the network state of an Awale game
     uint8_t board[2][6]; // 2 players, 6 pits each
@@ -23,5 +28,15 @@ typedef struct Move_Network {
 
 Move_Network serializeMove(const Move* move);
 void deserializeMove(const Move_Network* netMove, Move* move);
+
+typedef struct Command {
+	char command[MAX_CMD_LEN];
+	char* args[MAX_ARG_LEN];
+	int args_size;
+} Command;
+
+Command* createCommand(char* command, char* args[MAX_ARG_LEN], int size);
+int serialize_and_send_Command(int socket_fd, Command* cmd);
+Command* receive_and_deserialize_Command(int socket_fd);
 
 #endif

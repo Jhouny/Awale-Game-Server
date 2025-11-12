@@ -1,6 +1,7 @@
 #include "server.h"
 
 #include "database.h"
+#include "Network.h"
 
 int main(int argc, char* argv[]) {
 	if (!parse_args(argc, argv))
@@ -19,6 +20,7 @@ int main(int argc, char* argv[]) {
 	// Start server
 	printf("\nStarting server on port %s.\n", globals.port);
 	int socket_fd = setup_server();
+	struct pollfd fds[1];
 	if (socket_fd != -1) {
 		struct sockaddr* client_addr;	
 		socklen_t client_len = sizeof(client_addr);
@@ -29,8 +31,37 @@ int main(int argc, char* argv[]) {
 				return 1;
 			}
 			printf("New connection accepted.\n");
-			
+			fds[0].fd = client_socket_fd;
+
 			// Handle new connection here
+			// Listen to received commands from client and respond accordingly
+			while (1) {
+				// Poll for new command from client
+				if (poll(fds, 1, 1000) > 0) {
+					continue;  // No data received, continue polling
+				}
+
+				Command* cmd = receive_and_deserialize_Command(client_socket_fd);
+				if (cmd == NULL) {
+					printf("Error receiving command from client. Closing connection.\n");
+					close(client_socket_fd);
+					break;
+				}
+
+				printf("Received command '%s' with %d arguments from client.\n", cmd->command, cmd->args_size);
+
+				printf("Arguments:\n");
+				for (int i = 0; i < cmd->args_size; i++) {
+					printf("\t- %s\n", cmd->args[i]);
+				}
+				// Process command here
+
+				// Free command after processing
+				for (int i = 0; i < cmd->args_size; i++) {
+					free(cmd->args[i]);
+				}
+				free(cmd);
+			}	
 		}
 	}
 
@@ -73,7 +104,7 @@ int setup_server() {
 	struct sockaddr_in server_addr;
 
 	// Open socket 
-	socket_fd = socket(AF_INET, SOCK_STREAM, 0)
+	socket_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (socket_fd == -1) {
 		printf("Error opening socket.\n");
 		return -1;
