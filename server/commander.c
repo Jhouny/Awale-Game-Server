@@ -24,7 +24,7 @@ Response* execute_command(database *db, const Command* cmd, int client_socket_fd
         printf("Login attempt with username: %s and password: %s\n", username, password);
 
         // Verify user credentials against database
-        table* users_table = get_table(db, "users");
+        table* users_table = get_table(db, "users", 0);
         if (users_table == NULL) {
             printf("Users table not found in database.\n");
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Users table not found.");
@@ -56,7 +56,7 @@ Response* execute_command(database *db, const Command* cmd, int client_socket_fd
         printf("Signup attempt with username: %s and password: %s\n", username, password);
     
         // Verify and add user to database
-        table* users_table = get_table(db, "users");
+        table* users_table = get_table(db, "users", 0);
         if (users_table == NULL) {
             printf("Users table not found in database.\n");
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Table 'users' not found in database.");

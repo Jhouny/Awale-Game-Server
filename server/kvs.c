@@ -12,7 +12,7 @@ int delete_entry(entry* e, int locked) {
 	if (!locked)
 		pthread_mutex_lock(&mut_database);
 	if (e == NULL) {
-		if (!locked) {
+		if (!locked)
 			pthread_mutex_unlock(&mut_database);
 		return 0;
 	}
@@ -48,7 +48,7 @@ int delete_table(table* t, int locked) {
 		return 0;
 	}
 	for (int i = 0; i < t->size; i++) {
-		delete_entry(t->entries[i]);
+		delete_entry(t->entries[i], 1);
 	}
 	free(t->entries);
 	free(t);
@@ -57,15 +57,18 @@ int delete_table(table* t, int locked) {
 	return 1;
 }
 
-void set_table_name(table* t, const char* name) {
-	pthread_mutex_lock(&mut_database);
+void set_table_name(table* t, const char* name, int locked) {
+	if (!locked)
+		pthread_mutex_lock(&mut_database);
 	if (name == NULL || t == NULL) {
-		pthread_mutex_unlock(&mut_database);
+		if (!locked)
+			pthread_mutex_unlock(&mut_database);
 		return;
 	}
 	strncpy(t->name, name, 31);
 	t->name[31] = '\0';
-	pthread_mutex_unlock(&mut_database);
+	if (!locked)
+		pthread_mutex_unlock(&mut_database);
 }
 
 int insert(table* t, const char* key, const char* value) {

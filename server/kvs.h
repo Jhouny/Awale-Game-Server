@@ -29,7 +29,7 @@ typedef struct kvs {
 
 table* create_table();
 int delete_table(table* t, int locked);
-void set_table_name(table* t, const char* name);
+void set_table_name(table* t, const char* name, int locked);
 int insert(table* t, const char* key, const char* value);
 int insert_entry(table* t, const entry* e);
 int remove_entry(table* t, const char* key);

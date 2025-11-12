@@ -16,7 +16,7 @@
 // Define global variables here
 #define DATABASE_FILE 			"database.db"
 #define DATABASE_BACKUP_FILE 	"database.db.bckp"
-#define DATABASE_SAVE_INTERVAL	5  // in seconds
+#define DATABASE_SAVE_INTERVAL	30  // in seconds
 #define DEFAULT_PORT			"3000"
 
 

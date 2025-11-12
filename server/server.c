@@ -14,10 +14,17 @@ int main(int argc, char* argv[]) {
 	}
 	database* db = load_database(globals.db_file);
 
+	if (!validate_database(db)) {
+		printf("Database at %s is invalid or corrupted. Creating a new one...\n", globals.db_file);
+		if (db != NULL)
+			delete_database(db);
+		db = NULL;
+	}
+
 	if (db == NULL) {
 		printf("Couldn't open database at %s, creating an empty one...\n", globals.db_file);
 		db = create_database();
-		add_table(db, "users");
+		apply_database_schema(db);
 	} else {
 		printf("Loaded database from %s.\n\tBacking it up to %s.\n", globals.db_file, DATABASE_BACKUP_FILE);
 		save_database(db, DATABASE_BACKUP_FILE);

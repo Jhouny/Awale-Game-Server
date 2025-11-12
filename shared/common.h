@@ -17,6 +17,6 @@
 
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
 
-pthread_mutex_t mut_database = PTHREAD_MUTEX_INITIALIZER;
+extern pthread_mutex_t mut_database;
 
 #endif

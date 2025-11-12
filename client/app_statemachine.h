@@ -33,10 +33,10 @@ typedef struct {
     pthread_mutex_t data_mutex;
     int socket_fd;
     char status_message[256];
-    char bio[251];
+    char bio[256];
     int game_ids[1000];
     int game_count;
-    char* game_names[1000][1000];
+    char game_names[1000][1000];
 } ClientData;
 
 #endif

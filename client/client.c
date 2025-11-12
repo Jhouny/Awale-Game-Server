@@ -67,9 +67,9 @@ int main(int argc, char* argv[]) {
         .current_state = STATE_LOGIN,
         .incoming_challenges_count = 0,
         .selected_menu_option = 0,
-        .challenges_updated = 0, 
+        .challenges_updated = 0,
         .game_count = 0,
-        .game_ids = 0,
+        .game_ids = {0},
     };
     pthread_mutex_init(&client_data.data_mutex, NULL);
 
@@ -316,8 +316,8 @@ int main(int argc, char* argv[]) {
 
             // Préparer la commande RETRIEVE_BIO
             char** args = malloc(sizeof(char*) * 1);
-            args[0] = malloc(256);
-            strncpy(args[0], username, 256);
+            args[0] = (char*) malloc(MAX_ARG_LEN);
+            strncpy(args[0], username, MAX_ARG_LEN);
 
             Command* cmd = createCommand("RETRIEVE_BIO", args, 1);
             int res = serialize_and_send_Command(socket_fd, cmd);
@@ -332,14 +332,14 @@ int main(int argc, char* argv[]) {
                 if (response != NULL) {
                     if (response->status_code == 1 && response->body_size > 0) {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                "Bio of %s:\n%s", username, response->body[1]);
+                                "Bio of %s:\n%s", username, response->body[0]);
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
                                 "User '%s' not found or no bio available.", username);
                     }
 
-                    // Libération mémoire réponse
-                    for (int i = 0; i < response->body; i++)
+                    // Free memory of response
+                    for (int i = 0; i < response->body_size; i++)
                         free(response->body[i]);
                     free(response->body);
                     free(response);
@@ -410,7 +410,7 @@ int main(int argc, char* argv[]) {
             }
 
             else if (current_state == STATE_CHALLENGE) {
-                char username[256];
+                char username[MAX_ARG_LEN];
                 char mode[16];
 
                 fflush(stdout);
@@ -426,8 +426,10 @@ int main(int argc, char* argv[]) {
                 
                 // Prépare les arguments
                 char** args = malloc(sizeof(char*) * 2);
-                args[0] = strdup(username);
-                args[1] = strdup(mode);
+                args[0] = (char*) malloc(MAX_ARG_LEN);
+                strncpy(args[0], username, MAX_ARG_LEN);
+                args[1] = (char*) malloc(MAX_ARG_LEN);
+                strncpy(args[1], mode, MAX_ARG_LEN);
 
                 Command* cmd = createCommand("CHALLENGE", args, 2);
                 int res = serialize_and_send_Command(socket_fd, cmd);
@@ -480,7 +482,8 @@ int main(int argc, char* argv[]) {
                                     "Retrieved games:\n");
                             //Strucuture attendu : [1,[Alice,Bob]],[2,[Imane,Kamel]],[3,[Louis,Joséphine]]
 
-                            char *data = strdup(response->body[0]); // Copie modifiable de la chaîne
+                            char* data = malloc(strlen(response->body[0]) + 1);
+                            strncpy(data, response->body[0], strlen(response->body[0]) + 1);    
                             char *token = strtok(data, "]");        // Coupe à chaque fin de bloc "],"
                             client_data.game_count = 0;
 
@@ -623,7 +626,8 @@ int main(int argc, char* argv[]) {
 
             for (int i = 0; i < response->body_size; i++) {
                     // Exemple de response->body[i] : "[1,MonJeu]"
-                    char* copy = strdup(response->body[i]);
+                    char* copy = (char*)malloc(strlen(response->body[i]) + 1);
+                    strcpy(copy, response->body[i]);
                     // Enlève '[' au début et ']' à la fin
                     char* start = copy;
                     if (*start == '[') start++;
