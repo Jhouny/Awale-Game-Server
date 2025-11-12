@@ -29,3 +29,8 @@ Arguments globals;
  * \brief Function to parse the terminal arguments passed to the server
  */
 int parse_args(int argc, char* argv[]);
+
+/**
+ * \brief Encapsulates the server startup logic. Deals with socket creation and binding to port.
+ */
+int setup_server();

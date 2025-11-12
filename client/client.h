@@ -10,5 +10,8 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <sys/time.h>
+#include <pthread.h>
 #include "app_statemachine.h"
+#include "terminal_utils.h"
+
 
