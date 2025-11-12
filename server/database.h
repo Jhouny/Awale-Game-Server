@@ -3,6 +3,15 @@
 
 #include "kvs.h"
 
+#define DB_SCHEMA [ \
+	"users", \
+	"bio", \
+	"user-games", \
+	"chats", \
+	"friends", \
+	"", \
+]
+
 /**
  * \brief This struct defines the interface for CRUD operations in the database. It also handles the creation of tables.
  */
@@ -15,7 +24,7 @@ database* create_database();
 int delete_database(database* d);
 table* add_table(database* d, const char* name);
 const table* get_table(const database* d, const char* name);
-
+int validate_database(const database* d);
 int save_database(const database* d, const char* filename);
 database* load_database(const char* filename);
 

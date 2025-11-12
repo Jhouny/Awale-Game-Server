@@ -67,7 +67,9 @@ int main(int argc, char* argv[]) {
         .current_state = STATE_LOGIN,
         .incoming_challenges_count = 0,
         .selected_menu_option = 0,
-        .challenges_updated = 0 
+        .challenges_updated = 0, 
+        .game_count = 0,
+        .game_ids = 0,
     };
     pthread_mutex_init(&client_data.data_mutex, NULL);
 
@@ -303,6 +305,372 @@ int main(int argc, char* argv[]) {
             needs_redraw = 1;
         }
 
+        else if (current_state == STATE_RETRIEVE_BIO) {
+            char username[256];
+            fflush(stdout);
+
+            if (!fgets(username, sizeof(username), stdin)) {
+                continue;
+            }
+            username[strcspn(username, "\n")] = 0; // enlever le '\n'
+
+            // Préparer la commande RETRIEVE_BIO
+            char** args = malloc(sizeof(char*) * 1);
+            args[0] = malloc(256);
+            strncpy(args[0], username, 256);
+
+            Command* cmd = createCommand("RETRIEVE_BIO", args, 1);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+            free(args[0]);
+            free(args);
+
+            pthread_mutex_lock(&client_data.data_mutex);
+            if (res == 0) {
+                // Attendre la réponse du serveur
+                Response* response = receive_and_deserialize_Response(socket_fd);
+
+                if (response != NULL) {
+                    if (response->status_code == 1 && response->body_size > 0) {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Bio of %s:\n%s", username, response->body[1]);
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "User '%s' not found or no bio available.", username);
+                    }
+
+                    // Libération mémoire réponse
+                    for (int i = 0; i < response->body; i++)
+                        free(response->body[i]);
+                    free(response->body);
+                    free(response);
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Error: no response from server.");
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send RETRIEVE_BIO command.");
+            }
+
+            client_data.current_state = STATE_HOME;
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
+
+        else if (current_state == STATE_VIEW_CHALLENGES) {
+
+                // Créer la commande RETRIEVE_CHALLENGE sans argument
+                Command* cmd = createCommand("RETRIEVE_CHALLENGE", NULL, 0);
+                int res = serialize_and_send_Command(socket_fd, cmd);
+
+                pthread_mutex_lock(&client_data.data_mutex);
+
+                if (res == 0) {
+                    // Attendre la réponse du serveur
+                    Response* response = receive_and_deserialize_Response(socket_fd);
+
+                    if (response != NULL) {
+                        if (response->status_code == 1 && response->body_size > 0) {
+                            // Construire la liste à afficher
+                            char list_buffer[2048];
+                            strcpy(list_buffer, "Current Challenges:\n");
+
+                            for (int i = 0; i < response->body_size; i++) {
+                                strcat(list_buffer, "- ");
+                                strcat(list_buffer, response->body[i]);
+                                strcat(list_buffer, "\n");
+                            }
+
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "%s", list_buffer);
+                        } else if (response->status_code == 1 && response->body_size == 0) {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "No challenges available at the moment.");
+                        } else {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "Failed to retrieve challenges.");
+                        }
+
+                        // Libération mémoire de la réponse
+                        for (int i = 0; i < response->body_size; i++)
+                            free(response->body[i]);
+                        free(response);
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Error: no response from server.");
+                    }
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to send RETRIEVE_CHALLENGE command.");
+                }
+
+                client_data.current_state = STATE_HOME;
+                pthread_mutex_unlock(&client_data.data_mutex);
+                needs_redraw = 1;
+            }
+
+            else if (current_state == STATE_CHALLENGE) {
+                char username[256];
+                char mode[16];
+
+                fflush(stdout);
+                if (!fgets(username, sizeof(username), stdin))
+                    continue;
+                username[strcspn(username, "\n")] = '\0';
+
+                printf("Enter mode (public/private): ");
+                fflush(stdout);
+                if (!fgets(mode, sizeof(mode), stdin))
+                    continue;
+                mode[strcspn(mode, "\n")] = '\0';
+                
+                // Prépare les arguments
+                char** args = malloc(sizeof(char*) * 2);
+                args[0] = strdup(username);
+                args[1] = strdup(mode);
+
+                Command* cmd = createCommand("CHALLENGE", args, 2);
+                int res = serialize_and_send_Command(socket_fd, cmd);
+
+                pthread_mutex_lock(&client_data.data_mutex);
+
+                if (res == 0) {
+                    // Attente réponse
+                    Response* response = receive_and_deserialize_Response(socket_fd);
+                    if (response != NULL) {
+                        if (response->status_code == 1) {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "Challenge sent successfully to %s (%s mode).", username, mode);
+                        } else {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "Failed to challenge %s.", username);
+                        }
+
+                        for (int i = 0; i < response->body_size; i++)
+                            free(response->body[i]);
+                        free(response);
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "No response from server.");
+                    }
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to send challenge command.");
+                }
+
+                client_data.current_state = STATE_HOME;
+                pthread_mutex_unlock(&client_data.data_mutex);
+                needs_redraw = 1;
+            }
+        
+            else if (current_state == STATE_CHOOSE_GAME_SPECTATE) {
+                fflush(stdout);
+
+                // Commande sans argument
+                Command* cmd = createCommand("RETRIEVE_GAMES", NULL, 0);
+                int res = serialize_and_send_Command(socket_fd, cmd);
+
+                pthread_mutex_lock(&client_data.data_mutex);
+
+                if (res == 0) {
+                    Response* response = receive_and_deserialize_Response(socket_fd);
+                    if (response != NULL) {
+                        if (response->status_code == 1 && response->body_size > 0) {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "Retrieved games:\n");
+                            //Strucuture attendu : [1,[Alice,Bob]],[2,[Imane,Kamel]],[3,[Louis,Joséphine]]
+
+                            char *data = strdup(response->body[0]); // Copie modifiable de la chaîne
+                            char *token = strtok(data, "]");        // Coupe à chaque fin de bloc "],"
+                            client_data.game_count = 0;
+
+                            while (token != NULL) {
+                                // Nettoyage : enlève les crochets ou virgules en trop
+                                while (*token == '[' || *token == ',' || *token == ' ') token++;
+
+                                // Exemple de token : "1,[Alice,Bob"
+                                char *id_str = strtok(token, ",");  // "1"
+                                char *players_str = strtok(NULL, ","); // "[Alice,Bob"
+
+                                if (id_str && players_str) {
+                                    // Retire les crochets autour des joueurs
+                                    players_str = strchr(players_str, '[');
+                                    if (players_str) players_str++;
+                                    char *closing = strchr(players_str, ']');
+                                    if (closing) *closing = '\0';
+
+                                    // Sépare les deux joueurs
+                                    char *player1 = strtok(players_str, ",");
+                                    char *player2 = strtok(NULL, ",");
+
+                                    client_data.game_ids[client_data.game_count++] = atoi(id_str);
+
+                                    char line[256];
+                                    snprintf(line, sizeof(line),
+                                            "  - Game %s: %s vs %s\n",
+                                            id_str, player1 ? player1 : "?", player2 ? player2 : "?");
+
+                                    strncat(client_data.status_message, line,
+                                            sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                                }
+
+                                token = strtok(NULL, "]"); // Passe au prochain bloc
+                            }
+
+                            free(data);
+
+                             client_data.current_state = STATE_CHOOSE_GAME_SPECTATE;
+                        } else {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "Failed to retrieve saved games.");
+                        }
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "No response from server.");
+                    }
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to send retrieve games command.");
+                }
+
+                client_data.current_state = STATE_HOME;
+                pthread_mutex_unlock(&client_data.data_mutex);
+                needs_redraw = 1;
+            }
+        else if (current_state == STATE_SPECTATING) {
+            fflush(stdout);
+
+            printf("%s", client_data.status_message);
+            printf("\nEnter the Game ID to spectate: ");
+            fflush(stdout);
+
+            int chosen_id = -1;
+            scanf("%d", &chosen_id);
+
+            // Vérifie si le Game ID est valide
+            int valid = 0;
+            for (int i = 0; i < client_data.game_count; i++) {
+                if (client_data.game_ids[i] == chosen_id) {
+                    valid = 1;
+                    break;
+                }
+            }
+
+            if (!valid) {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Invalid Game ID selected.");
+                client_data.current_state = STATE_HOME;
+            } else {
+                // Envoie la commande SPECTATE
+                char *args[1];
+                char id_str[16];
+                snprintf(id_str, sizeof(id_str), "%d", chosen_id);
+                args[0] = id_str;
+
+                Command* spectate_cmd = createCommand("SPECTATE", args, 1);
+                int res = serialize_and_send_Command(socket_fd, spectate_cmd);
+
+                if (res == 0) {
+                    Response* response = receive_and_deserialize_Response(socket_fd);
+                    if (response != NULL) {
+                        if (response->status_code == 1) {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "Now spectating game %d...", chosen_id);
+                            client_data.current_state = STATE_SPECTATING;
+                        } else {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "Failed to spectate game %d.", chosen_id);
+                            client_data.current_state = STATE_HOME;
+                        }
+
+                        for (int i = 0; i < response->body_size; i++)
+                            free(response->body[i]);
+                        free(response);
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "No response from server for spectate request.");
+                        client_data.current_state = STATE_HOME;
+                    }
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to send spectate command.");
+                    client_data.current_state = STATE_HOME;
+                }
+            }
+
+            pthread_mutex_lock(&client_data.data_mutex);
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
+
+        else if (current_state == STATE_RETRIEVE_SELF_GAMES) {
+            fflush(stdout);
+
+            // Commande sans argument
+            Command* cmd = createCommand("RETRIEVE_SELF_GAMES", NULL, 0);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+
+            pthread_mutex_lock(&client_data.data_mutex);
+
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+                if (response != NULL) {
+                    if (response->status_code == 1 && response->body_size > 0) {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Retrieved your saved games:\n");
+
+                        client_data.game_count = 0;  // compteur local
+
+            for (int i = 0; i < response->body_size; i++) {
+                    // Exemple de response->body[i] : "[1,MonJeu]"
+                    char* copy = strdup(response->body[i]);
+                    // Enlève '[' au début et ']' à la fin
+                    char* start = copy;
+                    if (*start == '[') start++;
+                    char* end = strchr(start, ']');
+                    if (end) *end = '\0';
+
+                    // Sépare l'id et le nom sur la virgule
+                    char* id_str = strtok(start, ",");
+                    char* name_str = strtok(NULL, ",");
+
+                    if (id_str && name_str) {
+                        client_data.game_ids[client_data.game_count] = atoi(id_str);
+
+                        // Copie du nom (avec gestion de la taille max)
+                        strncpy(client_data.game_names[client_data.game_count], name_str, 1000 - 1);
+                        client_data.game_names[client_data.game_count][1000 - 1] = '\0';
+
+                        client_data.game_count++;
+
+                        char line[256];
+                        snprintf(line, sizeof(line), "  - Game %s: %s\n", id_str, name_str);
+                        strncat(client_data.status_message, line,
+                                sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                    }
+                    free(copy);
+                }
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "No saved games found.");
+                    }
+                    for (int i = 0; i < response->body_size; i++)
+                        free(response->body[i]);
+                    free(response);
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "No response from server.");
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send retrieve self games command.");
+            }
+
+            client_data.current_state = STATE_HOME;
+
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
 
         else {
             // Canonical mode for text input

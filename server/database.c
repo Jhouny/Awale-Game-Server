@@ -10,6 +10,7 @@ database* create_database() {
 }
 
 int delete_database(database* d) {
+	pthread_mutex_destroy(&mut_database);
 	if (d == NULL)
 		return 0;
 
@@ -22,6 +23,7 @@ int delete_database(database* d) {
 }
 
 table* add_table(database* d, const char* name) {
+	pthread_mutex_lock(&mut_database);
 	if (d == NULL || name == NULL)
 		return NULL;
 	
@@ -32,25 +34,48 @@ table* add_table(database* d, const char* name) {
 	d->tables[d->size - 1] = create_table();
 	if (d->tables[d->size - 1] == NULL)
 		return NULL;
+	pthread_mutex_unlock(&mut_database);
 	set_table_name(d->tables[d->size - 1], name);
 	return d->tables[d->size - 1];
 }
 
 const table* get_table(const database* d, const char* name) {
-	if (d == NULL || name == NULL)
+	pthread_mutex_lock(&mut_database);
+	if (d == NULL || name == NULL) {
+		pthread_mutex_unlock(&mut_database);
 		return NULL;
+	}
 
 	for (int i = 0; i < d->size; i++) {
 		if (strcmp(d->tables[i]->name, name) == 0) {
+			pthread_mutex_unlock(&mut_database);
 			return d->tables[i];
 		}
 	}
+	pthread_mutex_unlock(&mut_database);
 	return NULL;
 }
 
-int save_database(const database* d, const char* filename) {
-	if (d == NULL || filename == NULL)
+int validate_database(const database* d) {
+	pthread_mutex_lock(&mut_database);
+	if (d == NULL) {
+		pthread_mutex_unlock(&mut_database);
 		return 0;
+	}
+
+	for (int i = 0; i < d->size; i++) {
+		if (get_table(d, ))
+	}
+	pthread_mutex_unlock(&mut_database);
+	return 1;
+}
+
+int save_database(const database* d, const char* filename) {
+	pthread_mutex_lock(&mut_database);
+	if (d == NULL || filename == NULL) {
+		pthread_mutex_unlock(&mut_database);
+		return 0;
+	}
 
 	FILE* file = fopen(filename, "wb");
 	if (file == NULL)
@@ -70,6 +95,7 @@ int save_database(const database* d, const char* filename) {
 	}
 
 	fclose(file);
+	pthread_mutex_unlock(&mut_database);
 	return 1;
 }
 

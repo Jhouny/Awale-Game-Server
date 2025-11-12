@@ -8,6 +8,10 @@ int main(int argc, char* argv[]) {
 	if (!parse_args(argc, argv))
 		return 1;
 
+	if (pthread_mutex_init(&mut_database, NULL) != 0) {
+		printf("Error initializing database mutex.\n");
+		return 1;
+	}
 	database* db = load_database(globals.db_file);
 
 	if (db == NULL) {
@@ -22,19 +26,27 @@ int main(int argc, char* argv[]) {
 	// Start server
 	printf("\nStarting server on port %s.\n", globals.port);
 	int socket_fd = setup_server();
-	pthread_mutex_init(&mut_client_sockets_fd, NULL);
 	if (socket_fd != -1) {
 		if (pthread_mutex_init(&mut_client_sockets_fd, NULL) != 0) {
-			printf("Error initializing mutex.\n");
+			printf("Error initializing client sockets mutex.\n");
 			return 1;
 		}
-		pthread_t connectThread;
+		pthread_t connectThread, dbSaveThread;
 		int* param = (int *) malloc(sizeof(int));
 		param[0] = socket_fd;
 		
 		// Start thread to accept new connections
 		if (pthread_create(&connectThread, NULL, connection_loop, param) != 0) {
-			printf("Error creating thread.\n");
+			printf("Error creating socket thread.\n");
+			return 1;
+		}
+		
+		// Prepare parameters for database save thread
+		database** db_param = (database**) malloc(sizeof(database*));
+		db_param[0] = db;
+		// Start thread to periodically save database to disk
+		if (pthread_create(&dbSaveThread, NULL, database_save_loop, db_param) != 0) {
+			printf("Error creating database thread.\n");
 			return 1;
 		}
 	
@@ -104,6 +116,7 @@ int main(int argc, char* argv[]) {
 			pthread_mutex_unlock(&mut_client_sockets_fd);
 		}
 		pthread_join(connectThread, NULL);
+		pthread_join(dbSaveThread, NULL);
 	}
 
 	pthread_mutex_destroy(&mut_client_sockets_fd);
@@ -251,4 +264,18 @@ void *connection_loop(void *param) {
             return (void*)(intptr_t) 1;
         }
     }
+}
+
+void *database_save_loop(void *param) {
+	database* db = ((database **)param)[0];
+
+	while (1) {
+		sleep(DATABASE_SAVE_INTERVAL);
+		printf("Saving database to disk...\n");
+		if (save_database(db, globals.db_file) != 1) {
+			printf("Error saving database to disk.\n");
+		} else {
+			printf("Database saved successfully.\n");
+		}
+	}
 }

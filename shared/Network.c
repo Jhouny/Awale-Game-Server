@@ -161,6 +161,20 @@ int serialize_and_send_Response(int socket_fd, Response* res) {
 	}
 	total_bytes_sent += sizeof(int);
 
+	// Send message size
+	if (send(socket_fd, &res->message_size, sizeof(int), 0) != sizeof(int)) {
+		printf("Error sending response message size.\n");
+		return -1;
+	}
+	total_bytes_sent += sizeof(int);
+
+	// Send message
+	if (send(socket_fd, res->message, MAX_ARG_LEN, 0) != (size_t)MAX_ARG_LEN) {
+		printf("Error sending response message.\n");
+		return -1;
+	}
+	total_bytes_sent += MAX_ARG_LEN;
+
 	// Send body size
 	if (send(socket_fd, &res->body_size, sizeof(int), 0) != sizeof(int)) {
 		printf("Error sending response body size.\n");
@@ -204,6 +218,22 @@ Response* receive_and_deserialize_Response(int socket_fd) {
 		return NULL;
 	}
 	total_bytes_received += sizeof(int);
+
+	// Receive message size
+	if (recv(socket_fd, &res->message_size, sizeof(int), 0) != sizeof(int)) {
+		free(res);
+		printf("Error receiving response message size.\n");
+		return NULL;
+	}
+	total_bytes_received += sizeof(int);
+
+	// Receive message
+	if (recv(socket_fd, res->message, MAX_ARG_LEN, 0) != MAX_ARG_LEN) {
+		free(res);
+		printf("Error receiving response message.\n");
+		return NULL;
+	}
+	total_bytes_received += MAX_ARG_LEN;
 
 	// Receive body size
 	if (recv(socket_fd, &res->body_size, sizeof(int), 0) != sizeof(int)) {

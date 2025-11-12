@@ -41,8 +41,10 @@ Command* receive_and_deserialize_Command(int socket_fd);
 
 typedef struct Response {
     int status_code; // 1 for success, 0 for error
+    int message_size;
+    char message[MAX_ARG_LEN];  // Addtional info or error message
     int body_size;
-    char *body[MAX_ARG_LEN];
+    char *body[MAX_ARG_LEN];  // Serialized data objects
 } Response;
 
 int serialize_and_send_Response(int socket_fd, Response* res);

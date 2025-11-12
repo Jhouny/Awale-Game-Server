@@ -14,6 +14,7 @@ typedef enum {
     STATE_IN_GAME,
     STATE_CHOOSE_GAME_SPECTATE,
     STATE_SPECTATING,
+    STATE_RETRIEVE_SELF_GAMES,
     STATE_CHOOSE_GAME_TO_REVIEW,
     STATE_REVIEWING,
     STATE_RETRIEVE_BIO,
@@ -33,6 +34,9 @@ typedef struct {
     int socket_fd;
     char status_message[256];
     char bio[251];
+    int game_ids[1000];
+    int game_count;
+    char* game_names[1000][1000];
 } ClientData;
 
 #endif

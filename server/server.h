@@ -16,6 +16,7 @@
 // Define global variables here
 #define DATABASE_FILE 			"database.db"
 #define DATABASE_BACKUP_FILE 	"database.db.bckp"
+#define DATABASE_SAVE_INTERVAL	5  // in seconds
 #define DEFAULT_PORT			"3000"
 
 
@@ -53,3 +54,8 @@ int remove_client(int client_sfd);
  * \brief Thread function to accept new incoming connections.
  */
 void *connection_loop(void *param);
+
+/**
+ * \brief Thread function to periodically save the database to disk.
+ */
+void *database_save_loop(void *param);
