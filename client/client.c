@@ -180,8 +180,6 @@ int main(int argc, char* argv[]) {
             if (fgets(input, sizeof(input), stdin)) {
                 input[strcspn(input, "\n")] = 0;
 
-                pthread_mutex_lock(&client_data.data_mutex);
-
                 if (strcmp(input, "yes") == 0) {
                     // Passe à l'état login username
                     char username[256];
@@ -219,8 +217,17 @@ int main(int argc, char* argv[]) {
 
                     pthread_mutex_lock(&client_data.data_mutex);
                     if (res == 0) {
-                        snprintf(client_data.status_message, sizeof(client_data.status_message), "Login successful. Welcome %s!", username);
-                        client_data.current_state = STATE_HOME;
+                        // Wait for server confirmation
+                        Response *response = receive_and_deserialize_Response(socket_fd);
+
+                        if (response != NULL && response->status_code == 1) {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message), "Login successful. Welcome %s!", username);
+                            client_data.current_state = STATE_HOME;
+                            free(response);
+                        } else {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message), "Login failed. Try again.");
+                            // rester dans STATE_LOGIN pour réessayer
+                        }
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message), "Login failed. Try again.");
                         // rester dans STATE_LOGIN pour réessayer
@@ -238,8 +245,6 @@ int main(int argc, char* argv[]) {
                     snprintf(client_data.status_message, sizeof(client_data.status_message), "Please answer 'yes' or 'no'");
                     needs_redraw = 1;
                 }
-
-                pthread_mutex_unlock(&client_data.data_mutex);
             }
         }
 
@@ -271,7 +276,7 @@ int main(int argc, char* argv[]) {
             args[0] = malloc(251);
             strncpy(args[0], username, 251);
             args[1] = malloc(251);
-            strncpy(args[0], password, 251);
+            strncpy(args[1], password, 251);
             Command* cmd = createCommand("SIGNUP", args, 2);
             int res = serialize_and_send_Command(socket_fd, cmd);
             free(args[0]);
@@ -279,8 +284,17 @@ int main(int argc, char* argv[]) {
 
             pthread_mutex_lock(&client_data.data_mutex);
             if (res == 0) {
-                snprintf(client_data.status_message, sizeof(client_data.status_message), "Sign up successful. You can now login %s!", username);
-                client_data.current_state = STATE_HOME;
+                // Wait for server confirmation
+                Response* response = receive_and_deserialize_Response(socket_fd);
+
+                if (response != NULL && response->status_code == 1) {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message), "Sign up successful. You can now login %s!", username);
+                    client_data.current_state = STATE_LOGIN;
+                    free(response);
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message), "Sign up failed. Try again.");
+                    // rester dans STATE_LOGIN pour réessayer
+                }
             } else {
                 snprintf(client_data.status_message, sizeof(client_data.status_message), "Sign up failed. Try again.");
                 // rester dans STATE_LOGIN pour réessayer

@@ -151,6 +151,90 @@ Command* receive_and_deserialize_Command(int socket_fd) {
 }
 
 
+int serialize_and_send_Response(int socket_fd, Response* res) {
+	size_t total_bytes_sent = 0;
+
+	// Send status code
+	if (send(socket_fd, &res->status_code, sizeof(int), 0) != sizeof(int)) {
+		printf("Error sending response status code.\n");
+		return -1;
+	}
+	total_bytes_sent += sizeof(int);
+
+	// Send body size
+	if (send(socket_fd, &res->body_size, sizeof(int), 0) != sizeof(int)) {
+		printf("Error sending response body size.\n");
+		return -1;
+	}
+	total_bytes_sent += sizeof(int);
+
+	// Send body
+	for (int i = 0; i < res->body_size; i++) {
+		if (res->body[i] == NULL)
+			continue;
+
+		// Send body element
+		if (send(socket_fd, res->body[i], MAX_ARG_LEN, 0) != (size_t)MAX_ARG_LEN) {
+			printf("Error sending response body element '%s'.\n", res->body[i]);
+			return -1;
+		}
+		total_bytes_sent += MAX_ARG_LEN;
+	}
+
+	printf("Finished sending response with: %d bytes\n", (int)total_bytes_sent);
+	return 0;
+}
+
+Response* receive_and_deserialize_Response(int socket_fd) {
+	Response* res = (Response*) malloc(sizeof(Response));
+	if (res == NULL) {
+		printf("Error allocating response.\n");
+		return NULL;
+	}
+	memset(res, 0, sizeof(Response));
+
+	size_t total_bytes_received = 0;
+
+	printf("Receiving response from socket %d.\n", socket_fd);
+
+	// Receive status code
+	if (recv(socket_fd, &res->status_code, sizeof(int), 0) != sizeof(int)) {
+		free(res);
+		printf("Error receiving response status code.\n");
+		return NULL;
+	}
+	total_bytes_received += sizeof(int);
+
+	// Receive body size
+	if (recv(socket_fd, &res->body_size, sizeof(int), 0) != sizeof(int)) {
+		free(res);
+		printf("Error receiving response body size.\n");
+		return NULL;
+	}
+	total_bytes_received += sizeof(int);
+
+	printf("Response with status code %d and body size %d.\n", res->status_code, res->body_size);
+	// Receive body 
+	for (int i = 0; i < res->body_size; i++) {
+		res->body[i] = (char*) malloc(sizeof(char) * MAX_ARG_LEN);
+		if (res->body[i] == NULL) {
+			free(res);
+			printf("Error allocating response body buffer.\n");
+			return NULL;
+		}
+
+		// Receive body element
+		if (recv(socket_fd, res->body[i], MAX_ARG_LEN, 0) != MAX_ARG_LEN) {
+			free(res);
+			printf("Error receiving response body element size.\n");
+			return NULL;
+		}
+		total_bytes_received += MAX_ARG_LEN;
+	}
+	
+	printf("Finished receiving response with: %d bytes\n", (int)total_bytes_received);
+	return res;
+}
 
 
 

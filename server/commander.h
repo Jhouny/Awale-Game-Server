@@ -10,8 +10,8 @@
  * 
  * \param cmd 
  * \param client_socket_fd 
- * \return int 
+ * \return Response* 
  */
-int execute_command(database* db, const Command* cmd, int client_socket_fd);
+Response* execute_command(database* db, const Command* cmd, int client_socket_fd);
 
 #endif

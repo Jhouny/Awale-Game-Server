@@ -65,11 +65,22 @@ int main(int argc, char* argv[]) {
 						break;
 					}
 						
+					printf("Received command '%s' from client socket %d.\n", cmd->command, client_sockets_fd[i].fd);
 					// Handle command
-					if (execute_command(db, cmd, client_sockets_fd[i].fd) != 0) {
+					Response* res = execute_command(db, cmd, client_sockets_fd[i].fd);
+					if (res == NULL) {
 						printf("Error executing command from client.\n");
 						fflush(stdout);
 						pthread_mutex_unlock(&mut_client_sockets_fd);
+						break;
+					}
+
+					// Send response back to client
+					if (serialize_and_send_Response(client_sockets_fd[i].fd, res) != 0) {
+						printf("Error sending response to client. Closing connection.\n");
+						fflush(stdout);
+						pthread_mutex_unlock(&mut_client_sockets_fd);
+						remove_client(client_sockets_fd[i].fd);
 						break;
 					}
 

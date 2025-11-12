@@ -39,4 +39,13 @@ Command* createCommand(char* command, char** args, int size);
 int serialize_and_send_Command(int socket_fd, Command* cmd);
 Command* receive_and_deserialize_Command(int socket_fd);
 
+typedef struct Response {
+    int status_code; // 1 for success, 0 for error
+    int body_size;
+    char *body[MAX_ARG_LEN];
+} Response;
+
+int serialize_and_send_Response(int socket_fd, Response* res);
+Response* receive_and_deserialize_Response(int socket_fd);
+
 #endif
