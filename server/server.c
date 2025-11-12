@@ -2,6 +2,7 @@
 
 #include "database.h"
 #include "Network.h"
+#include "commander.h"
 
 int main(int argc, char* argv[]) {
 	if (!parse_args(argc, argv))
@@ -12,6 +13,7 @@ int main(int argc, char* argv[]) {
 	if (db == NULL) {
 		printf("Couldn't open database at %s, creating an empty one...\n", globals.db_file);
 		db = create_database();
+		add_table(db, "users");
 	} else {
 		printf("Loaded database from %s.\n\tBacking it up to %s.\n", globals.db_file, DATABASE_BACKUP_FILE);
 		save_database(db, DATABASE_BACKUP_FILE);
@@ -63,12 +65,14 @@ int main(int argc, char* argv[]) {
 						break;
 					}
 						
-					printf("Received command '%s' with %d arguments from client.\n", cmd->command, cmd->args_size);
-
-					printf("Arguments:\n");
-					for (int i = 0; i < cmd->args_size; i++) {
-						printf("\t- %s\n", cmd->args[i]);
+					// Handle command
+					if (execute_command(db, cmd, client_sockets_fd[i].fd) != 0) {
+						printf("Error executing command from client.\n");
+						fflush(stdout);
+						pthread_mutex_unlock(&mut_client_sockets_fd);
+						break;
 					}
+
 					// Free command after processing
 					for (int i = 0; i < cmd->args_size; i++) {
 						free(cmd->args[i]);
