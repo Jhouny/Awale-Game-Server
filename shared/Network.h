@@ -35,7 +35,7 @@ typedef struct Command {
 	int args_size;
 } Command;
 
-Command* createCommand(char* command, char* args[MAX_ARG_LEN], int size);
+Command* createCommand(char* command, char** args, int size);
 int serialize_and_send_Command(int socket_fd, Command* cmd);
 Command* receive_and_deserialize_Command(int socket_fd);
 
