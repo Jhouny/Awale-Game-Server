@@ -67,8 +67,7 @@ Command* createCommand(char* command, char** args, int size) {
 // Function to serialize and send a command to the socket
 int serialize_and_send_Command(int socket_fd, Command* cmd) {
 	size_t total_bytes_sent = 0;
-
-	printf("Sending command '%s'\t-->\t%d arguments.\n", cmd->command, cmd->args_size);
+	int argument_len;
 
 	// Send Command name
 	if (send(socket_fd, cmd->command, MAX_CMD_LEN, 0) != MAX_CMD_LEN) {
@@ -96,8 +95,7 @@ int serialize_and_send_Command(int socket_fd, Command* cmd) {
 		}
 		total_bytes_sent += MAX_ARG_LEN;
 	}
-	
-	printf("Finished sending command with: %d bytes\n", (int)total_bytes_sent);
+
 	return 0;
 }
 
