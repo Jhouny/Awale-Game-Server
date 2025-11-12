@@ -18,5 +18,6 @@ int read_key();
 #define KEY_DOWN 1001
 #define KEY_ENTER 10
 #define KEY_ESC 27
+#define KEY_NONE 0
 
 #endif
