@@ -5,12 +5,15 @@ char* render_client_state_text(const ClientData* data) {
     char* buffer = malloc(8192); 
     if (!buffer) return NULL;
 
-    strcpy(buffer, "\033[2J\033[H"); // Clear screen and move cursor to top-left
-    strcpy(buffer, "--- Awale Game Client ---\n");
+    sprintf(buffer, "\033[2J\033[H--- Awale Game Client ---\n");
 
     switch (data->current_state) {
+        case STATE_SIGN_UP:
+            strcat(buffer, "SIGN UP\n\nCreate your account.\n");
+            break;
+
         case STATE_LOGIN:
-            strcat(buffer, "LOGIN\n\nEnter your username...\nEnter your password...\n");
+            strcat(buffer, "LOGIN\n\nDo you have an account? (yes/no)\n");
             break;
 
         case STATE_HOME: {
@@ -51,7 +54,14 @@ char* render_client_state_text(const ClientData* data) {
                 strcat(buffer, line);
             }
             
+            if (strlen(data->status_message) > 0) {
+                strcat(buffer, "\n\033[32m");
+                strcat(buffer, data->status_message);
+                strcat(buffer, "\033[0m\n");
+            }
+
             strcat(buffer, "\n\033[90mUse ↑/↓ arrows to navigate, Enter to select\033[0m\n");
+            
             break;
         }
         
