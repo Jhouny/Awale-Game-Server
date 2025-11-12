@@ -1,56 +1,81 @@
 #include "client.h"
 #include "renderer.h"
 
-int main(int argc, char** argv ) {
-    int sockfd, newsockfd, clilen, chilpid, ok, nleft, nbwriten;
-    char c;
-    struct sockaddr_in cli_addr, serv_addr;
+//Simulate incoming challenges every 10 seconds
+void* challenge_simulator(void* arg) {
+    ClientData* data = (ClientData*) arg;
+    while (data->current_state != STATE_EXIT) {
+        sleep(10);
+        
+        pthread_mutex_lock(&data->data_mutex);
+        data->incoming_challenges_count++;
+        pthread_mutex_unlock(&data->data_mutex);
+        
+        // Effacer et réafficher
+        printf("\r\033[K\n");
+        pthread_mutex_lock(&data->data_mutex);
+        char* output = render_client_state_text(data);
+        pthread_mutex_unlock(&data->data_mutex);
+        
+        printf("%s", output);
+        free(output);
+        fflush(stdout);
+    }
+    return NULL;
+}
 
-    if (argc != 3) {
-        printf("usage  socket_client server port\n");
-        exit(0);
+int main() {
+    ClientData client_data = {
+        .current_state = STATE_HOME,
+        .incoming_challenges_count = 0
+    };
+    pthread_mutex_init(&client_data.data_mutex, NULL);
+
+    //Thread to simulate incoming challenges
+    pthread_t notif_thread;
+    if (pthread_create(&notif_thread, NULL, challenge_simulator, &client_data) != 0) {
+        perror("Failed to create notification thread");
+        return 1;
     }
 
-    printf ("client starting\n");  
+    while (client_data.current_state != STATE_EXIT) {
+        // Display current state
+        char* output = render_client_state_text(&client_data);
+        printf("%s", output);
+        free(output);
 
-    /* initialise la structure de donnee */
-    bzero((char*) &serv_addr, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
+        // User inputs
+        char input[256];
+        if (!fgets(input, sizeof(input), stdin)) break;
+        input[strcspn(input, "\n")] = 0;
 
-    struct hostent *he = gethostbyname(argv[1]);
-    if (he == NULL) {
-        perror("gethostbyname");
-        exit(1);
+        pthread_mutex_lock(&client_data.data_mutex);
+        // State management
+        if (strcmp(input, "exit") == 0 || strcmp(input, "9") == 0)
+            client_data.current_state = STATE_EXIT;
+        else if (strcmp(input, "back") == 0)
+            client_data.current_state = STATE_HOME;
+        else if (client_data.current_state == STATE_HOME) {
+            if (strcmp(input, "1") == 0) client_data.current_state = STATE_CHALLENGE;
+            else if (strcmp(input, "2") == 0) client_data.current_state = STATE_WRITE_BIO;
+            else if (strcmp(input, "3") == 0) client_data.current_state = STATE_CHOOSE_GAME_SPECTATE;
+            else if (strcmp(input, "4") == 0) client_data.current_state = STATE_CHOOSE_GAME_TO_REVIEW;
+            else if (strcmp(input, "5") == 0) client_data.current_state = STATE_VIEW_CHALLENGES;
+            else if (strcmp(input, "6") == 0) client_data.current_state = STATE_RETRIEVE_BIO;
+            else if (strcmp(input, "7") == 0) client_data.current_state = STATE_CHOOSE_CHAT;
+            else if (strcmp(input, "8") == 0) client_data.current_state = STATE_FRIENDS;
+        }
+
+        pthread_mutex_unlock(&client_data.data_mutex);
+
+
+        usleep(100000);
     }
-    memcpy(&serv_addr.sin_addr, he->h_addr_list[0], he->h_length);
-    serv_addr.sin_port = htons(atoi(argv[2]));
 
-    printf("Connecting to %s:%s\n", inet_ntoa(serv_addr.sin_addr), argv[2]);
+    pthread_mutex_destroy(&client_data.data_mutex);
+    //Wait for notification thread to finish
+    pthread_join(notif_thread, NULL);
 
-
-    sockfd=socket(AF_INET,SOCK_STREAM,0);
-    if (sockfd == -1) {
-        printf("socket error\n");
-        exit(0);
-    }
-
-    /*DECOMMENTER APRES*/
-    /* effectue la connection */
-    //if (connect(sockfd,(struct sockaddr*)&serv_addr,sizeof(serv_addr))<0)
-    //{
-        //perror("connect");
-        //printf("socket EEerror\n");
-        //exit(EXIT_FAILURE);
-    //}
-
-    printf("Connection successful.\n");
-
-    // --- NEW LOGIC: Start the state/render loop ---
-    renderer_state_loop(sockfd);
-    
-    // Close socket on exit
-    close(sockfd);
-    printf("Client disconnected.\n");
-
+    printf("Client closed.\n");
     return 0;
 }

@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "client.h": "c",
-        "app_statemachine.h": "c"
+        "app_statemachine.h": "c",
+        "inet.h": "c",
+        "common.h": "c"
     }
 }

@@ -1,6 +1,8 @@
 #ifndef APP_STATEMACHINE_H
 #define APP_STATEMACHINE_H
 
+#include <pthread.h>
+
 // Client state machine
 typedef enum {
     STATE_LOGIN,
@@ -24,6 +26,7 @@ typedef enum {
 typedef struct {
     ClientState current_state;
     int incoming_challenges_count;
+    pthread_mutex_t data_mutex;
 } ClientData;
 
 #endif
