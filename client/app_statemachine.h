@@ -6,6 +6,7 @@
 // Client state machine
 typedef enum {
     STATE_LOGIN,
+    STATE_SIGN_UP, 
     STATE_HOME,
     STATE_VIEW_CHALLENGES,
     STATE_CHALLENGE,
@@ -27,7 +28,11 @@ typedef struct {
     ClientState current_state;
     int incoming_challenges_count;
     int selected_menu_option;
+    int challenges_updated;
     pthread_mutex_t data_mutex;
+    int socket_fd;
+    char status_message[256];
+    char bio[251];
 } ClientData;
 
 #endif
