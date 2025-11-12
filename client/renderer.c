@@ -67,6 +67,7 @@ void render_client_state(const ClientData* data) {
             printf("WRITE BIO\n\n");
             printf("Enter your new bio below (single line):\n");
             printf("Type 'cancel' to discard changes.\n");
+            printf("Or type 'back' to return to home.\n");
             break;
 
         case STATE_CHOOSE_GAME_SPECTATE:
