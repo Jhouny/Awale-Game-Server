@@ -12,6 +12,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <poll.h>
 
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
 
