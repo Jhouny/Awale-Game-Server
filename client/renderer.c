@@ -2,9 +2,10 @@
 #include "client.h"
 
 char* render_client_state_text(const ClientData* data) {
-    char* buffer = malloc(4096); 
+    char* buffer = malloc(8192); 
     if (!buffer) return NULL;
 
+    strcpy(buffer, "\033[2J\033[H"); // Clear screen and move cursor to top-left
     strcpy(buffer, "--- Awale Game Client ---\n");
 
     switch (data->current_state) {
@@ -13,26 +14,44 @@ char* render_client_state_text(const ClientData* data) {
             break;
 
         case STATE_HOME: {
-            char temp[256];
-            if (data->incoming_challenges_count > 0) {
-                sprintf(temp, " \033[33m\033[1m(%d incoming)\033[0m",
-                        data->incoming_challenges_count);
-            } else {
-                strcpy(temp, "");
+            strcat(buffer, "HOME\n\nWelcome to the Awale server!\n\n");
+            
+            const char* options[] = {
+                "Launch a challenge",
+                "Write Bio",
+                "Spectate a game",
+                "Review saved games",
+                "View challenges",
+                "Retrieve Bio",
+                "Chat",
+                "Friends",
+                "Logout"
+            };
+            
+            for (int i = 0; i < 9; i++) {
+                char line[512];
+                
+                // Highlight the selected option
+                if (i == data->selected_menu_option) {
+                    if (i == 4 && data->incoming_challenges_count > 0) {
+                        sprintf(line, "  \033[7m> %s (%d incoming)\033[0m\n", 
+                                options[i], data->incoming_challenges_count);
+                    } else {
+                        sprintf(line, "  \033[7m> %s\033[0m\n", options[i]);
+                    }
+                } else {
+                    if (i == 4 && data->incoming_challenges_count > 0) {
+                        sprintf(line, "    %s \033[33m(%d incoming)\033[0m\n", 
+                                options[i], data->incoming_challenges_count);
+                    } else {
+                        sprintf(line, "    %s\n", options[i]);
+                    }
+                }
+                
+                strcat(buffer, line);
             }
-
-            sprintf(buffer + strlen(buffer),
-                "HOME\n\nWelcome to the Awale server!\n\n"
-                "  1. Launch a challenge\n"
-                "  2. Write Bio\n"
-                "  3. Spectate a game\n"
-                "  4. Review saved games\n"
-                "  5. View challenges%s\n"
-                "  6. Retrieve Bio\n"
-                "  7. Chat\n"
-                "  8. Friends\n"
-                "  9. Logout (type 'exit')\n",
-                temp);
+            
+            strcat(buffer, "\n\033[90mUse ↑/↓ arrows to navigate, Enter to select\033[0m\n");
             break;
         }
         
@@ -48,7 +67,7 @@ char* render_client_state_text(const ClientData* data) {
             break;
 
         case STATE_WRITE_BIO:
-            strcat(buffer, "WRITE BIO\n\nEnter your new bio (single line).\nType 'cancel' or 'back' to return to home.\n");
+            strcat(buffer, "WRITE BIO\n\nEnter your new bio (250 caracters).\nType 'back' to return to home.\n");
             break;
 
         case STATE_CHOOSE_GAME_SPECTATE:
@@ -96,6 +115,5 @@ char* render_client_state_text(const ClientData* data) {
             break;
     }
 
-    strcat(buffer, "\n-----------------------------------\nEnter your command: ");
     return buffer;
 }

@@ -26,6 +26,7 @@ typedef enum {
 typedef struct {
     ClientState current_state;
     int incoming_challenges_count;
+    int selected_menu_option;
     pthread_mutex_t data_mutex;
 } ClientData;
 
