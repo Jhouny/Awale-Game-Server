@@ -206,11 +206,13 @@ int main(int argc, char* argv[]) {
                     password[strcspn(password, "\n")] = 0;
 
                     // Préparer la commande LOGIN
-                    char* args[2];
-                    args[0] = strdup(username);
-                    args[1] = strdup(password);
+                    char** args = malloc(sizeof(char*) * 2);
 
-                    Command* cmd = createCommand("LOGIN", args, 2);
+                    args[0] = malloc(251);
+                    strncpy(args[0], username, 251);
+                    args[1] = malloc(251);
+                    strncpy(args[0], password, 251);
+                    Command* cmd = createCommand("SIGN-UP", args, 2);
                     int res = serialize_and_send_Command(socket_fd, cmd);
                     free(args[0]);
                     free(args[1]);
@@ -270,11 +272,8 @@ int main(int argc, char* argv[]) {
             strncpy(args[0], username, 251);
             args[1] = malloc(251);
             strncpy(args[0], password, 251);
-            printf("je suis la\n");
             Command* cmd = createCommand("SIGN-UP", args, 2);
-            printf("apres la commande\n");
             int res = serialize_and_send_Command(socket_fd, cmd);
-            printf("apres envoi\n");
             free(args[0]);
             free(args[1]);
 
@@ -287,7 +286,6 @@ int main(int argc, char* argv[]) {
                 // rester dans STATE_LOGIN pour réessayer
             }
             pthread_mutex_unlock(&client_data.data_mutex);
-            client_data.current_state = STATE_LOGIN;
             needs_redraw = 1;
         }
 

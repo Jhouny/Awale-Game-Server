@@ -69,8 +69,6 @@ int serialize_and_send_Command(int socket_fd, Command* cmd) {
 	size_t total_bytes_sent = 0;
 	int argument_len;
 
-	printf("Sending command '%s'\t-->\t%d arguments.\n", cmd->command, cmd->args_size);
-
 	// Send Command name
 	if (send(socket_fd, cmd->command, MAX_CMD_LEN, 0) != MAX_CMD_LEN) {
 		printf("Error sending command name.\n");
@@ -97,8 +95,7 @@ int serialize_and_send_Command(int socket_fd, Command* cmd) {
 		}
 		total_bytes_sent += MAX_ARG_LEN;
 	}
-	
-	printf("Finished sending command.\n");
+
 	return 0;
 }
 
