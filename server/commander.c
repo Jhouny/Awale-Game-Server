@@ -1,4 +1,5 @@
 #include "commander.h"
+#include "GameEngine.h"
 
 commanderGlobals cmdGlobals;
 
@@ -101,10 +102,6 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
                     return res;
                 }
                 strcpy(res->body[res->body_size++], curr->value);
-                // Add commas between usernames except for the last one
-                if (i < cmdGlobals.user_fds->size - 1) {
-                    strcat(res->body, ",");
-                }
             }
         }
         res->status_code = 1; // Success
@@ -149,7 +146,176 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
 		}
 		res->status_code = 1;
 		return res;
+    } else if (strcmp(cmd->command, "ACCEPT_CHALLENGE") == 0) {
+        if (cmd->args_size != 1) {
+            printf("Invalid number of arguments for %s command.\n", cmd->command);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Invalid number of arguments for %s.", cmd->command);
+            return res;
+        }
+        char *challenger_username = cmd->args[0];
+        char *challenged_username = get(cmdGlobals.user_fds, fd_string);
+        if (challenged_username == NULL) {
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "No registered username for fd %d.\n", client_socket_fd);
+            return res;
+        }
 
+        // Create a new game instance between challenger and challenged
+        printf("Starting a new game between %s and %s.\n", challenger_username, challenged_username);
+        Awale* new_game = (Awale*) malloc(sizeof(Awale));
+        initAwale(new_game);
+        // Assign player names and unique game ID
+        strncpy(new_game->playernames[0], challenger_username, 250);
+        strncpy(new_game->playernames[1], challenged_username, 250);
+        new_game->game_id = cmdGlobals.running_games_count + 1; // Simple incremental ID assignment
+        srand(time(NULL));
+        if (rand() % 2 == 0)
+            strncpy(new_game->lastPlayer, challenger_username, 250);
+        else
+            strncpy(new_game->lastPlayer, challenged_username, 250);
+        
+        Awale_Network net_game = serializeAwale(new_game);
+        res->body[0] = (char*) malloc(sizeof(Awale_Network));
+        if (res->body[0] == NULL) {
+            printf("Error allocating memory for game in response body.\n");
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for game.");
+            free(new_game);
+            return res;
+        }
+        memcpy(res->body[0], &net_game, sizeof(Awale_Network));
+        res->body_size = 1;
+        res->status_code = 1; // Success
+
+        // Find challenger user file descriptor
+        char challenger_fd_string[MAX_VALUE_LEN];
+        int found = 0;
+        for (int i = 0; i < cmdGlobals.user_fds->size; i++) {
+            entry* curr = cmdGlobals.user_fds->entries[i];
+            if (!curr->free && strcmp(curr->value, challenger_username) == 0) {
+                snprintf(challenger_fd_string, MAX_VALUE_LEN, "%s", curr->key);
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            printf("Challenger username %s not found in user_fds table.\n", challenger_username);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Challenger username not found.");
+            free(new_game);
+            free(res->body[0]);
+            res->body[0] = NULL;
+            res->body_size = 0;
+            res->status_code = 0;
+            serialize_and_send_Response(atoi(challenger_fd_string), res);
+            return res;
+        }
+
+        // Increment running games count and store the new game
+        cmdGlobals.running_games = (Awale**) realloc(cmdGlobals.running_games, sizeof(Awale*) * (cmdGlobals.running_games_count + 1));
+        cmdGlobals.running_games[cmdGlobals.running_games_count++] = new_game;
+        
+        // Send game instance to challenger
+        serialize_and_send_Response(atoi(challenger_fd_string), res);
+
+        return res;
+    } else if (strcmp(cmd->command, "PLAY_MOVE") == 0) {
+        if (cmd->args_size != 1) {
+            printf("Invalid number of arguments for %s command.\n", cmd->command);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Invalid number of arguments for %s.", cmd->command);
+            return res;
+        }
+        int pit_index = atoi(cmd->args[0]);
+        // Find the game instance for this player
+        Awale* game = NULL;
+        for (size_t i = 0; i < cmdGlobals.running_games_count; i++) {
+            Awale* curr_game = cmdGlobals.running_games[i];
+            if (strcmp(curr_game->playernames[0], get(cmdGlobals.user_fds, fd_string)) == 0 ||
+                strcmp(curr_game->playernames[1], get(cmdGlobals.user_fds, fd_string)) == 0) {  // If either player matches
+                game = curr_game;
+                break;
+            }
+        }
+
+        if (game == NULL) {
+            printf("No active game found for user associated with fd %d.\n", client_socket_fd);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "No active game found for user.");
+            return res;
+        }
+
+        if (pit_index < 0) {
+            // Forfeit the game
+            printf("User %s forfeits the game %d.\n", get(cmdGlobals.user_fds, fd_string), game->game_id);
+            game->gameOver = true;
+            if (strcmp(game->playernames[0], get(cmdGlobals.user_fds, fd_string)) == 0) {
+                game->winner = 1; // Player 2 wins
+            } else {
+                game->winner = 0; // Player 1 wins
+            }
+            Awale_Network net_game = serializeAwale(game);
+            res->body[0] = (char*) malloc(sizeof(Awale_Network));
+            if (res->body[0] == NULL) {
+                printf("Error allocating memory for game in response body.\n");
+                res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for game.");
+                return res;
+            }
+            memcpy(res->body[0], &net_game, sizeof(Awale_Network));
+            res->body_size = 1;
+            res->status_code = 1; // Success
+            return res;
+        }
+
+        // Validate if player can play right now
+        char* lastplayer = game->lastPlayer;
+        char* currentplayer = get(cmdGlobals.user_fds, fd_string);
+        if (strcmp(lastplayer, currentplayer) == 0) {
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "It's not your turn. Wait for the other player to play.");
+            return res;
+        }
+
+        // Process the move
+        int8_t player_index = (strcmp(game->playernames[0], currentplayer) == 0) ? 0 : 1;
+        bool move_result = playMove(game, player_index, pit_index, false);
+        if (!move_result) {
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Invalid move. Try again.");
+            return res;
+        }
+        // Update last player
+        strncpy(game->lastPlayer, currentplayer, 250);
+        
+        res->status_code = 1; // Success
+        return res;
+    } else if (strcmp(cmd->command, "UPDATE_GAME") == 0) {
+        if (cmd->args_size != 0) {
+            printf("Invalid number of arguments for %s command.\n", cmd->command);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Invalid number of arguments for %s.", cmd->command);
+            return res;
+        }
+        // Find the game instance for this player
+        Awale* game = NULL;
+        for (size_t i = 0; i < cmdGlobals.running_games_count; i++) {
+            Awale* curr_game = cmdGlobals.running_games[i];
+            if (strcmp(curr_game->playernames[0], get(cmdGlobals.user_fds, fd_string)) == 0 ||
+                strcmp(curr_game->playernames[1], get(cmdGlobals.user_fds, fd_string)) == 0) {  // If either player matches
+                game = curr_game;
+                break;
+            }
+        }
+
+        if (game == NULL) {
+            printf("No active game found for user associated with fd %d.\n", client_socket_fd);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "No active game found for user.");
+            return res;
+        }
+
+        Awale_Network net_game = serializeAwale(game);
+        res->body[0] = (char*) malloc(sizeof(Awale_Network));
+        if (res->body[0] == NULL) {
+            printf("Error allocating memory for game in response body.\n");
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for game.");
+            return res;
+        }
+        memcpy(res->body[0], &net_game, sizeof(Awale_Network));
+        res->body_size = 1;
+        res->status_code = 1; // Success
+        return res;
     } else if (strcmp(cmd->command, "CHALLENGE") == 0) {
         if (cmd->args_size != 2) {
             printf("Invalid number of arguments for %s command.\n", cmd->command);

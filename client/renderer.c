@@ -66,10 +66,7 @@ char* render_client_state_text(const ClientData* data) {
         }
         
         case STATE_VIEW_CHALLENGES:
-            sprintf(buffer + strlen(buffer),
-                "INCOMING CHALLENGES\n\nYou have %d pending challenge(s).\n"
-                "Type 'back' to return to home.\n",
-                data->incoming_challenges_count);
+            sprintf(buffer + strlen(buffer),"Type 'back' to return to home.\n");
             break;
 
         case STATE_CHALLENGE:

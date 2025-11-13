@@ -32,6 +32,7 @@ typedef enum {
 // Client dynamic data
 typedef struct {
     ClientState current_state;
+    char incoming_challenges[1000][251];
     int incoming_challenges_count;
     int selected_menu_option;
     int challenges_updated;

@@ -11,7 +11,9 @@ void initAwale(Awale* game) {
 
     game->gameOver = false;
     game->winner = -1;
-    game->currentPlayer = 0;
+    game->game_id = -1;
+    memset(game->playernames, 0, sizeof(game->playernames));
+    game->lastPlayer[0] = '\0';
     game->spectators_fds = NULL;
     game->spectators_count = 0;
 }

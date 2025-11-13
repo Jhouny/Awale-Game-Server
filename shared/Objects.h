@@ -11,7 +11,7 @@ typedef struct Awale {
     int8_t            winner;  // -1 if no winner, 0 or 1 for players
     int              game_id;  // Unique identifier for the game
     char playernames[2][250];  // Names of the two players
-    int        currentPlayer;
+    char     lastPlayer[250];  // The player who made the last move
     int      *spectators_fds;  // Dynamic array of spectator file descriptors
     size_t  spectators_count;
 } Awale;

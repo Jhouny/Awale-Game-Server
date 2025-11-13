@@ -3,21 +3,6 @@
 #include "Network.h"
 #include <netdb.h> 
 
-//Simulate incoming challenges every 10 seconds
-void* challenge_simulator(void* arg) {
-    ClientData* data = (ClientData*) arg;
-    while (data->current_state != STATE_EXIT) {
-        sleep(10);
-        
-        pthread_mutex_lock(&data->data_mutex);
-        data->incoming_challenges_count++;
-        
-        data->challenges_updated = 1; //Notify main loop to redraw
-        pthread_mutex_unlock(&data->data_mutex);
-    }
-    return NULL;
-}
-
 void display_response_message(ClientData* client_data, Response* response) {
     if (response != NULL && strlen(response->message) > 0) {
         size_t current_len = strlen(client_data->status_message);
@@ -50,13 +35,13 @@ int main(int argc, char* argv[]) {
     hints.ai_family = AF_UNSPEC;      // IPv4 ou IPv6
     hints.ai_socktype = SOCK_STREAM;  // TCP
 
-    // 🔗 Résolution adresse
+    //  Résolution adresse
     if (getaddrinfo(argv[1], argv[2], &hints, &result) != 0) {
         printf("Error getting address info.\n");
         return 1;
     }
 
-    // 🔌 Tentative de connexion
+    // Tentative de connexion
     for (rp = result; rp != NULL; rp = rp->ai_next) {
         socket_fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
         if (socket_fd == -1)
@@ -372,57 +357,129 @@ int main(int argc, char* argv[]) {
         }
 
         else if (current_state == STATE_VIEW_CHALLENGES) {
+            fflush(stdout);
+            
+            // Envoie une commande pour récupérer tous les défis reçus
+            Command* cmd = createCommand("RETRIEVE_CHALLENGES", NULL, 0);
+            int res = serialize_and_send_Command(socket_fd, cmd);
 
-                // Créer la commande RETRIEVE_CHALLENGES sans argument
-                Command* cmd = createCommand("RETRIEVE_CHALLENGES", NULL, 0);
-                int res = serialize_and_send_Command(socket_fd, cmd);
+            pthread_mutex_lock(&client_data.data_mutex);
 
-                pthread_mutex_lock(&client_data.data_mutex);
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
 
-                if (res == 0) {
-                    // Attendre la réponse du serveur
-                    Response* response = receive_and_deserialize_Response(socket_fd);
+                if (response != NULL) {
+                    if (response->status_code == 1 && response->body_size > 0) {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "You have received challenges from:\n");
 
-                    if (response != NULL) {
-                        if (response->status_code == 1 && response->body_size > 0) {
-                            // Construire la liste à afficher
-                            char list_buffer[2048];
-                            strcpy(list_buffer, "Current Challenges:\n");
+                        client_data.incoming_challenges_count = 0;
 
-                            for (int i = 0; i < response->body_size; i++) {
-                                strncat(list_buffer, "- ", sizeof(list_buffer) - strlen(list_buffer) - 1);
-                                strncat(list_buffer, response->body[i], sizeof(list_buffer) - strlen(list_buffer) - 1);
-                                strncat(list_buffer, "\n", sizeof(list_buffer) - strlen(list_buffer) - 1);
-                            }
+                        for (int i = 0; i < response->body_size; i++) {
+                            char *challenger = response->body[i];
 
-                            snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                    "%s", list_buffer);
-                            display_response_message(&client_data, response);
-                        } else if (response->status_code == 1 && response->body_size == 0) {
-                            snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                    "No challenges available at the moment.");
-                        } else {
-                            snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                    "Failed to retrieve challenges.");
+                            // Stocke le nom du challenger
+                            strncpy(client_data.incoming_challenges[client_data.incoming_challenges_count],
+                                    challenger, sizeof(client_data.incoming_challenges[0]) - 1);
+                            client_data.incoming_challenges[client_data.incoming_challenges_count][sizeof(client_data.incoming_challenges[0]) - 1] = '\0';
+                            client_data.incoming_challenges_count++;
+
+                            // Affichage
+                            char line[256];
+                            snprintf(line, sizeof(line), "  - %s\n", challenger);
+                            strncat(client_data.status_message, line,
+                                    sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                        }
+                        printf( "%s", client_data.status_message);
+                        fflush(stdout);
+                        // Demande à l'utilisateur d’en choisir un
+                        pthread_mutex_unlock(&client_data.data_mutex);
+                        needs_redraw = 1;
+
+                        char chosen_user[256];
+
+                        printf("Enter the username of the challenge you want to accept:\n");
+                        fflush(stdout);
+                        if (!fgets(chosen_user, sizeof(chosen_user), stdin)) continue;
+                        chosen_user[strcspn(chosen_user, "\n")] = '\0';
+
+                        if (strcmp(chosen_user, "back") == 0) {
+                            pthread_mutex_lock(&client_data.data_mutex);
+                            client_data.current_state = STATE_HOME;
+                            pthread_mutex_unlock(&client_data.data_mutex);
+                            needs_redraw = 1;
+                            continue;
                         }
 
-                        // Libération mémoire de la réponse
-                        for (int i = 0; i < response->body_size; i++)
-                            free(response->body[i]);
-                        free(response);
+                        // Vérifie si ce nom correspond à un challenger connu
+                        bool found = false;
+                        for (int i = 0; i < client_data.incoming_challenges_count; i++) {
+                            if (strcmp(chosen_user, client_data.incoming_challenges[i]) == 0) {
+                                found = true;
+                                strcpy(client_data.selected_chat_user, chosen_user);
+                                break;
+                            }
+                        }
+
+                        pthread_mutex_lock(&client_data.data_mutex);
+                        if (!found) {
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "No challenge found from '%s'.", chosen_user);
+                            client_data.current_state = STATE_VIEW_CHALLENGES;
+                        } else {
+                            // Envoie la commande pour accepter ce challenge
+                            char* args[1] = { client_data.selected_chat_user };
+                            Command* accept_cmd = createCommand("ACCEPT_CHALLENGE", args, 1);
+                            int res2 = serialize_and_send_Command(socket_fd, accept_cmd);
+
+                            if (res2 == 0) {
+                                Response* accept_response = receive_and_deserialize_Response(socket_fd);
+                                if (accept_response && accept_response->status_code == 1) {
+                                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                            "Challenge with %s started!", client_data.selected_chat_user);
+                                    client_data.current_state = STATE_IN_GAME;
+                                } else {
+                                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                            "Failed to start challenge with %s.", client_data.selected_chat_user);
+                                    client_data.current_state = STATE_HOME;
+                                }
+
+                                if (accept_response) {
+                                    for (int i = 0; i < accept_response->body_size; i++) free(accept_response->body[i]);
+                                    free(accept_response);
+                                }
+                            } else {
+                                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                        "Failed to send ACCEPT_CHALLENGE command.");
+                                client_data.current_state = STATE_HOME;
+                            }
+                        }
+
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                "Error: no response from server.");
+                                "No incoming challenges found.");
+                        client_data.current_state = STATE_HOME;
                     }
+
+                    for (int i = 0; i < response->body_size; i++)
+                        free(response->body[i]);
+                    free(response);
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Failed to send RETRIEVE_CHALLENGES command.");
+                            "No response from server.");
+                    client_data.current_state = STATE_HOME;
                 }
-
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send VIEW_CHALLENGES command.");
                 client_data.current_state = STATE_HOME;
-                pthread_mutex_unlock(&client_data.data_mutex);
-                needs_redraw = 1;
             }
+
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
+
+
 
             else if (current_state == STATE_CHALLENGE) {
                 char username[MAX_ARG_LEN];
@@ -433,12 +490,28 @@ int main(int argc, char* argv[]) {
                     continue;
                 username[strcspn(username, "\n")] = '\0';
 
+                if (strcmp(username, "back") == 0) {
+                    pthread_mutex_lock(&client_data.data_mutex);
+                    client_data.current_state = STATE_HOME;
+                    pthread_mutex_unlock(&client_data.data_mutex);
+                    needs_redraw = 1;
+                    continue;
+                }
                 printf("Enter mode (public/private): ");
                 fflush(stdout);
                 if (!fgets(mode, sizeof(mode), stdin))
                     continue;
                 mode[strcspn(mode, "\n")] = '\0';
                 
+
+                if (strcmp(mode, "back") == 0) {
+                    pthread_mutex_lock(&client_data.data_mutex);
+                    client_data.current_state = STATE_HOME;
+                    pthread_mutex_unlock(&client_data.data_mutex);
+                    needs_redraw = 1;
+                    continue;
+                }
+
                 // Prépare les arguments
                 char** args = malloc(sizeof(char*) * 2);
                 args[0] = (char*) malloc(MAX_ARG_LEN);
@@ -452,16 +525,46 @@ int main(int argc, char* argv[]) {
                 pthread_mutex_lock(&client_data.data_mutex);
 
                 if (res == 0) {
-                    // Attente réponse
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Challenge sent to %s (%s mode). Waiting for response...\n", username, mode);
+                    client_data.current_state = STATE_CHALLENGE;
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to send challenge command.");
+                    client_data.current_state = STATE_HOME;
+                    pthread_mutex_unlock(&client_data.data_mutex);
+                    needs_redraw = 1;
+                    continue;
+                }
+
+                pthread_mutex_unlock(&client_data.data_mutex);
+                needs_redraw = 1;
+
+                // 🕒 Attente de la réponse pendant max 60 secondes
+                fd_set readfds;
+                struct timeval timeout;
+                timeout.tv_sec = 60;   // 1 minute
+                timeout.tv_usec = 0;
+
+                FD_ZERO(&readfds);
+                FD_SET(socket_fd, &readfds);
+
+                int activity = select(socket_fd + 1, &readfds, NULL, NULL, &timeout);
+
+                if (activity > 0 && FD_ISSET(socket_fd, &readfds)) {
+                    // Une réponse du serveur est arrivée !
                     Response* response = receive_and_deserialize_Response(socket_fd);
+                    pthread_mutex_lock(&client_data.data_mutex);
+
                     if (response != NULL) {
                         if (response->status_code == 1) {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                    "Challenge sent successfully to %s (%s mode).", username, mode);
-                                    display_response_message(&client_data, response);
+                                    "Challenge accepted! Starting game with %s.", username);
+                            client_data.current_state = STATE_IN_GAME;
                         } else {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                    "Failed to challenge %s.", username);
+                                    "Challenge rejected or failed.");
+                            client_data.current_state = STATE_HOME;
                         }
 
                         for (int i = 0; i < response->body_size; i++)
@@ -469,18 +572,173 @@ int main(int argc, char* argv[]) {
                         free(response);
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                "No response from server.");
+                                "No valid response received from server.");
+                        client_data.current_state = STATE_HOME;
                     }
-                } else {
+
+                    pthread_mutex_unlock(&client_data.data_mutex);
+                }
+                else if (activity == 0) {
+                    // ⏰ Timeout atteint
+                    pthread_mutex_lock(&client_data.data_mutex);
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Failed to send challenge command.");
+                            "Challenge not accepted or user not online (timeout after 1 minute).");
+                    client_data.current_state = STATE_HOME;
+                    pthread_mutex_unlock(&client_data.data_mutex);
+                }
+                else {
+                    // ⚠️ Erreur sur select()
+                    pthread_mutex_lock(&client_data.data_mutex);
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Error while waiting for response.");
+                    client_data.current_state = STATE_HOME;
+                    pthread_mutex_unlock(&client_data.data_mutex);
                 }
 
-                client_data.current_state = STATE_HOME;
-                pthread_mutex_unlock(&client_data.data_mutex);
                 needs_redraw = 1;
             }
-        
+            else if (current_state == STATE_IN_GAME) {
+                printf("\n=== Awale Game ===\n");
+
+                int game_over = 0;
+
+                while (!game_over) {
+
+                    // Boucle d’attente : tant que c’est pas ton tour
+                    while (1) {
+                        Command* update_cmd = createCommand("UPDATE_GAME", NULL, 0);
+                        int update_res = serialize_and_send_Command(socket_fd, update_cmd);
+
+                        if (update_res != 0) {
+                            printf("Error sending UPDATE_GAME command.\n");
+                            break;
+                        }
+
+                        Response* update_response = receive_and_deserialize_Response(socket_fd);
+                        if (update_response == NULL) {
+                            printf("No response from server (UPDATE_GAME).\n");
+                            break;
+                        }
+
+                        if (update_response->status_code == 1 && update_response->body_size > 0) {
+                            Awale_Network net_game;
+                            memcpy(&net_game, update_response->body[0], sizeof(Awale_Network));
+
+                            // Désérialisation vers Awale normal
+                            Awale game;
+                            deserializeAwale(&net_game, &game);
+
+                            // Clear screen and print board
+                            printf("\033[H\033[J"); // ANSI escape code to clear screen
+                            printf("\n--- Current Board ---\n");
+                            printBoard(&game);
+                            printf("Last move by: %s\n", net_game.lastPlayer);
+                            
+                            printf("Game over status: %s\n", game.gameOver ? "Yes" : "No");
+
+                            if (game.gameOver) {
+                                if (game.winner == -1)
+                                    printf("\nGame over! It's a draw!\n");
+                                else
+                                    printf("\nGame over! Player %d wins!\n", game.winner + 1);
+
+                                game_over = 1;
+                                break;
+                            }
+
+                            // Si c’est ton tour → sortir de la boucle d’attente
+                            if (strcmp(net_game.lastPlayer, client_data.username) != 0) {
+                                printf("\n It's your turn, %s!\n", client_data.username);
+                                break;
+                            }
+                        }
+
+                        for (int i = 0; i < update_response->body_size; i++)
+                            free(update_response->body[i]);
+                        free(update_response);
+                        
+                        printf("Waiting for opponent...\n");
+                        sleep(1);
+                    }
+
+                    if (game_over) break;
+
+                    // Demande un coup
+                    printf("\nEnter your move (0–5) or -1 to quit: ");
+                    fflush(stdout);
+
+                    char input[32];
+                    if (!fgets(input, sizeof(input), stdin)) continue;
+                    input[strcspn(input, "\n")] = '\0';
+
+                    int pit = atoi(input);
+                    if (pit == -1) {
+                        pthread_mutex_lock(&client_data.data_mutex);
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "You left the game and returned to home.");
+                        client_data.current_state = STATE_HOME;
+                        pthread_mutex_unlock(&client_data.data_mutex);
+                        needs_redraw = 1;
+                        break;
+                    }
+
+                    if (pit < 0 || pit > 5) {
+                        printf("Invalid move. Please choose between 0 and 5.\n");
+                        continue;
+                    }
+
+                    // Envoie le move
+                    char pit_str[8];
+                    snprintf(pit_str, sizeof(pit_str), "%d", pit);
+                    char* args[1] = { pit_str };
+
+                    Command* move_cmd = createCommand("PLAY_MOVE", args, 1);
+                    int send_res = serialize_and_send_Command(socket_fd, move_cmd);
+
+                    if (send_res != 0) {
+                        printf("Failed to send PLAY_MOVE command.\n");
+                        break;
+                    }
+
+                    Response* move_response = receive_and_deserialize_Response(socket_fd);
+                    if (move_response == NULL) {
+                        printf("No response from server after move.\n");
+                        break;
+                    }
+
+                    if (move_response->status_code == 1 && move_response->body_size > 0) {
+                        Awale_Network net_game;
+                        memcpy(&net_game, move_response->body[0], sizeof(Awale_Network));
+
+                        Awale game;
+                        deserializeAwale(&net_game, &game);
+
+                        printf("\n--- Updated Board ---\n");
+                        printBoard(&game);
+
+                        if (game.gameOver) {
+                            if (game.winner == -1)
+                                printf("\nGame over! It's a draw!\n");
+                            else
+                                printf("\nGame over! Player %d wins!\n", game.winner + 1);
+                            game_over = 1;
+                        }
+                    } else {
+                        printf("Invalid move or server error.\n");
+                    }
+
+                    for (int i = 0; i < move_response->body_size; i++)
+                        free(move_response->body[i]);
+                    free(move_response);
+                }
+
+                if (game_over) {
+                    pthread_mutex_lock(&client_data.data_mutex);
+                    client_data.current_state = STATE_HOME;
+                    pthread_mutex_unlock(&client_data.data_mutex);
+                    needs_redraw = 1;
+                }
+            }
             else if (current_state == STATE_CHOOSE_GAME_SPECTATE) {
                 fflush(stdout);
 

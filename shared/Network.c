@@ -9,6 +9,7 @@ Awale_Network serializeAwale(const Awale* game) {
     netGame.scores[0] = (uint8_t)game->scores[0];
     netGame.scores[1] = (uint8_t)game->scores[1];
     netGame.gameOver = game->gameOver ? 1 : 0;
+	strncpy(netGame.lastPlayer, game->lastPlayer, 250);
     netGame.winner = (int8_t)game->winner;
     return netGame;
 }
@@ -21,6 +22,7 @@ void deserializeAwale(const Awale_Network* netGame, Awale* game) {
     game->scores[0] = (int)netGame->scores[0];
     game->scores[1] = (int)netGame->scores[1];
     game->gameOver = netGame->gameOver != 0;
+	strncpy(game->lastPlayer, netGame->lastPlayer, 250);
     game->winner = (int)netGame->winner;
 }
 
@@ -208,8 +210,6 @@ Response* receive_and_deserialize_Response(int socket_fd) {
 
 	size_t total_bytes_received = 0;
 
-	printf("Receiving response from socket %d.\n", socket_fd);
-
 	// Receive status code
 	if (recv(socket_fd, &res->status_code, sizeof(int), 0) != sizeof(int)) {
 		free(res);
@@ -242,7 +242,6 @@ Response* receive_and_deserialize_Response(int socket_fd) {
 	}
 	total_bytes_received += sizeof(int);
 
-	printf("Response with status code %d and body size %d.\n", res->status_code, res->body_size);
 	// Receive body 
 	for (int i = 0; i < res->body_size; i++) {
 		res->body[i] = (char*) malloc(sizeof(char) * MAX_ARG_LEN);
@@ -261,7 +260,6 @@ Response* receive_and_deserialize_Response(int socket_fd) {
 		total_bytes_received += MAX_ARG_LEN;
 	}
 	
-	printf("Finished receiving response with: %d bytes\n", (int)total_bytes_received);
 	return res;
 }
 
