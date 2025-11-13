@@ -670,8 +670,75 @@ int main(int argc, char* argv[]) {
                         "Failed to send retrieve self games command.");
             }
 
-            client_data.current_state = STATE_HOME;
+            client_data.current_state = STATE_REVIEWING;
 
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
+        else if (current_state == STATE_REVIEWING) {
+            char game_name[256];
+            fflush(stdout);
+
+            if (!fgets(game_name, sizeof(game_name), stdin)) {
+                continue;
+            }
+            game_name[strcspn(game_name, "\n")] = '\0';
+
+            // Vérifie que le nom existe dans les jeux récupérés
+            bool found = false;
+            for (int i = 0; i < client_data.game_count; i++) {
+                if (strcmp(client_data.game_names[i], game_name) == 0) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Game '%s' not found in your saved games.", game_name);
+                client_data.current_state = STATE_HOME;
+                needs_redraw = 1;
+                continue;
+            }
+
+            // Préparer la commande REVIEW
+            char** args = malloc(sizeof(char*) * 1);
+            args[0] = malloc(strlen(game_name) + 1);
+            strcpy(args[0], game_name);
+
+            Command* cmd = createCommand("REVIEW", args, 1);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+
+            free(args[0]);
+            free(args);
+
+            pthread_mutex_lock(&client_data.data_mutex);
+
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+                if (response != NULL) {
+                    if (response->status_code == 1 && response->body_size > 0) {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "✅ Successfully retrieved game '%s'.\n%s",
+                                game_name, response->body[0]);
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "❌ Failed to review game '%s'.", game_name);
+                    }
+
+                    for (int i = 0; i < response->body_size; i++)
+                        free(response->body[i]);
+                    free(response);
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "No response from server for REVIEW command.");
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send REVIEW command.");
+            }
+
+            client_data.current_state = STATE_HOME;
             pthread_mutex_unlock(&client_data.data_mutex);
             needs_redraw = 1;
         }
