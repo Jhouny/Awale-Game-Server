@@ -132,7 +132,7 @@ int main(int argc, char* argv[]) {
                     case 4: client_data.current_state = STATE_VIEW_CHALLENGES; break;
                     case 5: client_data.current_state = STATE_RETRIEVE_BIO; break;
                     case 6: client_data.current_state = STATE_CHOOSE_CHAT; break;
-                    case 7: client_data.current_state = STATE_RETRIEVE_FRIENDS; break;
+                    case 7: client_data.current_state = STATE_FRIENDS; break;
                     case 8: client_data.current_state = STATE_EXIT; break;
                 }
                 needs_redraw = 1;
@@ -679,10 +679,9 @@ int main(int argc, char* argv[]) {
                         client_data.current_state = STATE_HOME;
                         pthread_mutex_unlock(&client_data.data_mutex);
                         needs_redraw = 1;
-                        break;
                     }
 
-                    if (pit < 0 || pit > 5) {
+                    if (pit > 5) {
                         printf("Invalid move. Please choose between 0 and 5.\n");
                         continue;
                     }
@@ -703,6 +702,13 @@ int main(int argc, char* argv[]) {
                     Response* move_response = receive_and_deserialize_Response(socket_fd);
                     if (move_response == NULL) {
                         printf("No response from server after move.\n");
+                        break;
+                    }
+
+                    if (pit == -1) {
+                        for (int i = 0; i < move_response->body_size; i++)
+                            free(move_response->body[i]);
+                        free(move_response);
                         break;
                     }
 
@@ -1258,7 +1264,7 @@ int main(int argc, char* argv[]) {
             needs_redraw = 1;
         }
 
-        else if (current_state == STATE_RETRIEVE_FRIENDS) {
+        else if (current_state == STATE_FRIENDS) {
             fflush(stdout);
 
             // Envoi de la commande pour récupérer les amis, sans argument
@@ -1273,6 +1279,7 @@ int main(int argc, char* argv[]) {
                 if (response && response->status_code == 1 && response->body_size > 0) {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Your friends:\n");
+                    printf("Your friends:\n");
 
                     client_data.friends_count = 0;
 
@@ -1280,6 +1287,7 @@ int main(int argc, char* argv[]) {
                         snprintf(client_data.friends_usernames[i],
                                 sizeof(client_data.friends_usernames[i]), "%s", response->body[i]);
 
+                        printf("  %d - %s\n", i + 1, response->body[i]);
                         char line[256];
                         snprintf(line, sizeof(line), "  %d - %s\n", i + 1, response->body[i]);
                         strncat(client_data.status_message, line,
@@ -1288,17 +1296,11 @@ int main(int argc, char* argv[]) {
                         client_data.friends_count++;
                     }
 
-                    // Instructions pour l’utilisateur
-                    strncat(client_data.status_message,
-                            "\nType 'add friend' to add a friend or 'remove friend' to remove one.\n",
-                            sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
                     display_response_message(&client_data, response);
-                    client_data.current_state = STATE_RETRIEVE_FRIENDS;  // reste ici pour la saisie
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "You have no friends.\nType 'add friend' to add one.");
+                            "You have no friends.\nType 'add <username>' to add one.");
                     client_data.friends_count = 0;
-                    client_data.current_state = STATE_RETRIEVE_FRIENDS;
                 }
 
                 if (response) {
@@ -1315,23 +1317,67 @@ int main(int argc, char* argv[]) {
             if (fgets(input, sizeof(input), stdin) == NULL) continue;
             input[strcspn(input, "\n")] = '\0';
 
-            if (strcmp(input, "add friend") == 0) {
-                client_data.current_state = STATE_ADD_FRIEND;
-                needs_redraw = 1;
-            } else if (strcmp(input, "remove friend") == 0) {
-                client_data.current_state = STATE_REMOVE_FRIEND;
-                needs_redraw = 1;
-            } else {
-                snprintf(client_data.status_message, sizeof(client_data.status_message),
-                        "Invalid command. Type 'add friend' or 'remove friend'.");
-                needs_redraw = 1;
-            }
+            if (strncmp(input, "add ", 4) == 0) {
+                char* username_to_add = input + 4;
+
+                char* args[1] = { username_to_add };
+                Command* cmd = createCommand("ADD_FRIEND", args, 1);
+                int res = serialize_and_send_Command(socket_fd, cmd);
+
+                if (res == 0) {
+                    Response* response = receive_and_deserialize_Response(socket_fd);
+
+                    if (response && response->status_code == 1) {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Friend '%s' added successfully.", username_to_add);
+                        display_response_message(&client_data, response);
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Failed to add friend '%s'.", username_to_add);
+                    }
+
+                    if (response) {
+                        for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                        free(response);
+                    }
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to send ADD_FRIEND command.");
+                }
+            } else if (strncmp(input, "remove ", 7) == 0) {
+                char* username_to_remove = input + 7;
+
+                char* args[1] = { username_to_remove };
+                Command* cmd = createCommand("REMOVE_FRIEND", args, 1);
+                int res = serialize_and_send_Command(socket_fd, cmd);
+
+                if (res == 0) {
+                    Response* response = receive_and_deserialize_Response(socket_fd);
+
+                    if (response && response->status_code == 1) {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Friend '%s' removed successfully.", username_to_remove);
+                        display_response_message(&client_data, response);
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Failed to remove friend '%s'.", username_to_remove);
+                    }
+
+                    if (response) {
+                        for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                        free(response);
+                    }
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to send REMOVE_FRIEND command.");
+                }
+            }            
 
             pthread_mutex_unlock(&client_data.data_mutex);
             needs_redraw = 1;
         }
 
-        else if (current_state == STATE_ADD_FRIEND) {
+        /*else if (current_state == STATE_ADD_FRIEND) {
             fflush(stdout);
             printf("Enter the username to add as friend: ");
             char username[251];
@@ -1407,7 +1453,7 @@ int main(int argc, char* argv[]) {
             client_data.current_state = STATE_RETRIEVE_FRIENDS;
             pthread_mutex_unlock(&client_data.data_mutex);
             needs_redraw = 1;
-        }
+        }*/
 
         else {
             // Canonical mode for text input

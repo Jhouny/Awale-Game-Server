@@ -109,9 +109,9 @@ char* render_client_state_text(const ClientData* data) {
         case STATE_CHATTING:
             strcat(buffer, "CHATTING\n\nType messages directly or 'back' to close chat.\n");
             break;
-
-        case STATE_RETRIEVE_FRIENDS:
-            strcat(buffer, "FRIENDS LIST\n\nCommands:\n  add <username>\n  remove <username>\n  or 'back' to return to home\n");
+        
+        case STATE_FRIENDS:
+            strcat(buffer, "FRIENDS MENU\n\nType:\n\t'add <username>' to add a friend\n\t'remove <username>' to remove a friend\n\t'back' to return to home.\n");
             break;
 
         case STATE_IN_GAME:

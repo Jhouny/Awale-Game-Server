@@ -679,6 +679,7 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Friends table not found.");
             return res;
         }
+        res->status_code = 1; // Success
         char* friends_list = get(friends_table, username);
         if (friends_list == NULL) {
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "No friends found for user %s.", username);
@@ -693,11 +694,16 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
                 i++;
             }
             currFriend[currIndex] = '\0';
-            strcpy(res->body[res->body_size++], currFriend);
+            res->body[res->body_size] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+            if (res->body[res->body_size] == NULL) {
+                printf("Error allocating memory for friend username in response body.\n");
+                res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for friend username.");
+                return res;
+            }
+            strncpy(res->body[res->body_size++], currFriend, MAX_ARG_LEN);
             if (friends_list[i] == '\0')
                 break;
         }
-        res->status_code = 1; // Success
         return res;
     } else if (strcmp(cmd->command, "ADD_FRIEND") == 0) {
         if (cmd->args_size != 1) {
@@ -722,8 +728,13 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
         char new_friends_entry[MAX_VALUE_LEN];
         if (existing_friends == NULL)
             snprintf(new_friends_entry, MAX_VALUE_LEN, "%s", new_friend_username);
-        else
+        else {
+            if (strstr(existing_friends, new_friend_username) != NULL) {
+                res->message_size = snprintf(res->message, MAX_ARG_LEN, "User %s is already your friend.", new_friend_username);
+                return res;
+            }
             snprintf(new_friends_entry, MAX_VALUE_LEN, "%s,%s", existing_friends, new_friend_username);
+        }
         // Update the friends table with the new friends list
         if (!insert(friends_table, username, new_friends_entry)) {
             printf("Error adding friend to friends table.\n");
