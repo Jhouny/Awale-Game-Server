@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
                     case 4: client_data.current_state = STATE_VIEW_CHALLENGES; break;
                     case 5: client_data.current_state = STATE_RETRIEVE_BIO; break;
                     case 6: client_data.current_state = STATE_CHOOSE_CHAT; break;
-                    case 7: client_data.current_state = STATE_FRIENDS; break;
+                    case 7: client_data.current_state = STATE_RETRIEVE_FRIENDS; break;
                     case 8: client_data.current_state = STATE_EXIT; break;
                 }
                 needs_redraw = 1;
