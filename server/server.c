@@ -30,6 +30,8 @@ int main(int argc, char* argv[]) {
 		save_database(db, DATABASE_BACKUP_FILE);
 	}
 
+	// Add database to commander globals
+	cmdGlobals.db = db;
 	// Start challenges container
 	table* challenges = create_table();
 	set_table_name(challenges, "challenges", 1);  // No need to lock mutex, since there's no concurrency till here
