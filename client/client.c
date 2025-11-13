@@ -674,74 +674,178 @@ int main(int argc, char* argv[]) {
 
             pthread_mutex_unlock(&client_data.data_mutex);
             needs_redraw = 1;
+
+            char input[256];
+            fflush(stdout);
+            if (!fgets(input, sizeof(input), stdin)) continue;
+            input[strcspn(input, "\n")] = '\0';
+
+            int selected_id = atoi(input);
+                bool found = false;
+                char selected_name[256] = "";
+
+                for (int i = 0; i < client_data.game_count; i++) {
+                    if (client_data.game_ids[i] == selected_id) {
+                        found = true;
+                        strcpy(selected_name, client_data.game_names[i]);
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    pthread_mutex_lock(&client_data.data_mutex);
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                             "Game ID %d not found.", selected_id);
+                    client_data.current_state = STATE_RETRIEVE_SELF_GAMES;
+                    pthread_mutex_unlock(&client_data.data_mutex);
+                    needs_redraw = 1;
+                    continue;
+                }
+
+                // Stocke le jeu sélectionné et passe à l'état de review
+                strcpy(client_data.selected_game_name, selected_name);
+                client_data.current_state = STATE_REVIEWING;
+                needs_redraw = 1;
         }
         else if (current_state == STATE_REVIEWING) {
-            char game_name[256];
-            fflush(stdout);
+            printf("Reviewing game: %s\n", client_data.selected_game_name);
 
-            if (!fgets(game_name, sizeof(game_name), stdin)) {
-                continue;
-            }
-            game_name[strcspn(game_name, "\n")] = '\0';
+            // Envoi initial de REVIEW
+            char** args = malloc(sizeof(char*) * 1);
+            args[0] = client_data.selected_game_name;
+            Command* cmd = createCommand("REVIEW", args, 1);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+            free(args[0]);
+            free(args);
 
-            // Vérifie que le nom existe dans les jeux récupérés
-            bool found = false;
-            for (int i = 0; i < client_data.game_count; i++) {
-                if (strcmp(client_data.game_names[i], game_name) == 0) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
+            if (res != 0) {
                 snprintf(client_data.status_message, sizeof(client_data.status_message),
-                        "Game '%s' not found in your saved games.", game_name);
+                        "Failed to send review command.");
                 client_data.current_state = STATE_HOME;
                 needs_redraw = 1;
                 continue;
             }
 
-            // Préparer la commande REVIEW
-            char** args = malloc(sizeof(char*) * 1);
-            args[0] = malloc(strlen(game_name) + 1);
-            strcpy(args[0], game_name);
+            Response* response = receive_and_deserialize_Response(socket_fd);
+            if (response && response->status_code == 1 && response->body_size > 0) {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Now reviewing: %s\n%s", client_data.selected_game_name, response->body[0]);
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to load game content.");
+                client_data.current_state = STATE_HOME;
+                needs_redraw = 1;
+                continue;
+            }
 
-            Command* cmd = createCommand("REVIEW", args, 1);
+            for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+            free(response);
+
+            // Boucle de navigation
+            char command[64];
+            while (1) {
+                printf("\n> ");
+                fflush(stdout);
+                if (!fgets(command, sizeof(command), stdin)) break;
+                command[strcspn(command, "\n")] = '\0';
+
+                if (strcmp(command, "next") == 0 || strcmp(command, "prev") == 0) {
+                    // Envoie une commande NEXT ou PREV au serveur
+                    Command* nav_cmd = createCommand(command, NULL, 0);
+                    if (serialize_and_send_Command(socket_fd, nav_cmd) != 0) {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Failed to send %s command.", command);
+                        continue;
+                    }
+
+                    Response* nav_resp = receive_and_deserialize_Response(socket_fd);
+                    if (nav_resp && nav_resp->status_code == 1 && nav_resp->body_size > 0) {
+                        printf("%s\n", nav_resp->body[0]);
+                    } else {
+                        printf("No further move in this direction.\n");
+                    }
+
+                    for (int i = 0; i < nav_resp->body_size; i++) free(nav_resp->body[i]);
+                    free(nav_resp);
+                }
+            }
+        }
+        else if (current_state == STATE_CHOOSE_CHAT) {
+            fflush(stdout);
+
+            // Commande simple sans argument
+            Command* cmd = createCommand("RETRIEVE_CHATS", NULL, 0);
             int res = serialize_and_send_Command(socket_fd, cmd);
-
-            free(args[0]);
-            free(args);
 
             pthread_mutex_lock(&client_data.data_mutex);
 
             if (res == 0) {
                 Response* response = receive_and_deserialize_Response(socket_fd);
+
                 if (response != NULL) {
                     if (response->status_code == 1 && response->body_size > 0) {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                "✅ Successfully retrieved game '%s'.\n%s",
-                                game_name, response->body[0]);
+                                "You have conversations with:\n");
+
+                        client_data.chat_count = 0;
+
+                        for (int i = 0; i < response->body_size; i++) {
+                            char *username = response->body[i];
+                            snprintf(client_data.chat_usernames[client_data.chat_count],
+                                    sizeof(client_data.chat_usernames[client_data.chat_count]),
+                                    "%s", username);
+                            client_data.chat_count++;
+
+                            char line[256];
+                            snprintf(line, sizeof(line), "  %d - %s\n", i + 1, username);
+                            strncat(client_data.status_message, line,
+                                    sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                        }
+
+                        client_data.current_state = STATE_SELECT_CHAT_USER;
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                "❌ Failed to review game '%s'.", game_name);
+                                "No previous conversations found.");
+                        client_data.current_state = STATE_HOME;
                     }
 
-                    for (int i = 0; i < response->body_size; i++)
-                        free(response->body[i]);
+                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
                     free(response);
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "No response from server for REVIEW command.");
+                            "No response from server.");
+                    client_data.current_state = STATE_HOME;
                 }
             } else {
                 snprintf(client_data.status_message, sizeof(client_data.status_message),
-                        "Failed to send REVIEW command.");
+                        "Failed to send retrieve chats command.");
+                client_data.current_state = STATE_HOME;
             }
 
-            client_data.current_state = STATE_HOME;
             pthread_mutex_unlock(&client_data.data_mutex);
             needs_redraw = 1;
         }
+
+        else if (current_state == STATE_CHATTING) {
+            fflush(stdout);
+
+            char message[251];
+            if (fgets(message, sizeof(message), stdin) == NULL)
+                continue;
+
+            message[strcspn(message, "\n")] = '\0'; // Retire le \n
+
+            // Message vide : on ignore
+            if (strlen(message) == 0) continue;
+
+            // On passe à l’état SEND_MSG pour traiter l’envoi
+            pthread_mutex_lock(&client_data.data_mutex);
+            strncpy(client_data.pending_message, message, sizeof(client_data.pending_message) - 1);
+            client_data.current_state = STATE_SEND_MSG;
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
+
 
         else {
             // Canonical mode for text input

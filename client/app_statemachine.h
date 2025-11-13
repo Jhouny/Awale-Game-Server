@@ -37,6 +37,12 @@ typedef struct {
     int game_ids[1000];
     int game_count;
     char game_names[1000][1000];
+    char selected_game_name[1000];
+    char chat_usernames[1000][251];
+    int chat_count;
+    char selected_chat_user[251];
+    char selected_chat_user[251];
+    char pending_message[251]; 
 } ClientData;
 
 #endif

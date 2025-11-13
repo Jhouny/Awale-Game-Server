@@ -30,6 +30,20 @@ int main(int argc, char* argv[]) {
 		save_database(db, DATABASE_BACKUP_FILE);
 	}
 
+	// Start challenges container
+	table* challenges = create_table();
+	set_table_name(challenges, "challenges", 1);  // No need to lock mutex, since there's no concurrency till here
+	cmdGlobals.challenges = challenges;
+	
+	// Create user to file descriptor association table
+	table* user_fds = create_table();
+	set_table_name(user_fds, "user_fds", 1);
+	cmdGlobals.user_fds = user_fds;
+
+	// Start running games container 
+	cmdGlobals.running_games = NULL;
+	cmdGlobals.running_games_count = 0;
+	
 	// Start server
 	printf("\nStarting server on port %s.\n", globals.port);
 	int socket_fd = setup_server();
@@ -86,7 +100,7 @@ int main(int argc, char* argv[]) {
 						
 					printf("Received command '%s' from client socket %d.\n", cmd->command, client_sockets_fd[i].fd);
 					// Handle command
-					Response* res = execute_command(db, cmd, client_sockets_fd[i].fd);
+					Response* res = execute_command(cmd, client_sockets_fd[i].fd);
 					if (res == NULL) {
 						printf("Error executing command from client.\n");
 						fflush(stdout);

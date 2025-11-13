@@ -11,6 +11,9 @@ void initAwale(Awale* game) {
 
     game->gameOver = false;
     game->winner = -1;
+    game->currentPlayer = 0;
+    game->spectators_fds = NULL;
+    game->spectators_count = 0;
 }
 
 // Function to copy one awale game state to another

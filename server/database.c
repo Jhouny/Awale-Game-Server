@@ -4,7 +4,7 @@ static const char DB_SCHEMA[][32] = {
 	"users",
 	"bio",
 	"user-games",
-	"chats",
+	"chats",		// Stores chats in the form: username1_username2 -> message1|message2|...
 	"friends",
 };
 

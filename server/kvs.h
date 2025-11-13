@@ -2,7 +2,7 @@
 #define _KVS_H_
 
 #define MAX_KEY_LEN 	128
-#define MAX_VALUE_LEN 	128
+#define MAX_VALUE_LEN 	1024
 
 #include "common.h"
 

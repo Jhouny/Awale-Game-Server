@@ -6,6 +6,9 @@
 #include "Set.h"
 
 bool playMove(Awale* game, int player, int pit, bool recursive);
-// Recursive function to check if the current state can lead to captures
+/**
+ * \brief Recursive function to check if the current state can lead to captures
+ */
 bool canCapture(Awale* currentState, Set* seenStates, int player);
+
 #endif
