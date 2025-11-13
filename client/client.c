@@ -18,6 +18,22 @@ void* challenge_simulator(void* arg) {
     return NULL;
 }
 
+void display_response_message(ClientData* client_data, Response* response) {
+    if (response != NULL && strlen(response->message) > 0) {
+        size_t current_len = strlen(client_data->status_message);
+        size_t available = sizeof(client_data->status_message) - current_len - 1;
+        
+        if (available > 20) {
+            char server_msg[512];
+            snprintf(server_msg, sizeof(server_msg), "\nServer: %s", response->message);
+            strncat(client_data->status_message, server_msg, available);
+        } else {
+            snprintf(client_data->status_message, sizeof(client_data->status_message),
+                    "Server: %s", response->message);
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
 
     if (argc != 3) {
@@ -224,6 +240,7 @@ int main(int argc, char* argv[]) {
 
                         if (response != NULL && response->status_code == 1) {
                             snprintf(client_data.status_message, sizeof(client_data.status_message), "Login successful. Welcome %s!", username);
+                            display_response_message(&client_data, response);
                             strncpy(client_data.username, username, sizeof(client_data.username) - 1);
                             client_data.current_state = STATE_HOME;
                             free(response);
@@ -292,6 +309,7 @@ int main(int argc, char* argv[]) {
 
                 if (response != NULL && response->status_code == 1) {
                     snprintf(client_data.status_message, sizeof(client_data.status_message), "Sign up successful. You can now login %s!", username);
+                    display_response_message(&client_data, response);
                     client_data.current_state = STATE_LOGIN;
                     free(response);
                 } else {
@@ -334,6 +352,7 @@ int main(int argc, char* argv[]) {
                     if (response->status_code == 1 && response->body_size > 0) {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
                                 "Bio of %s:\n%s", username, response->body[0]);
+                        display_response_message(&client_data, response);
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
                                 "User '%s' not found or no bio available.", username);
@@ -383,6 +402,7 @@ int main(int argc, char* argv[]) {
 
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "%s", list_buffer);
+                            display_response_message(&client_data, response);
                         } else if (response->status_code == 1 && response->body_size == 0) {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "No challenges available at the moment.");
@@ -443,6 +463,7 @@ int main(int argc, char* argv[]) {
                         if (response->status_code == 1) {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "Challenge sent successfully to %s (%s mode).", username, mode);
+                                    display_response_message(&client_data, response);
                         } else {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "Failed to challenge %s.", username);
@@ -499,8 +520,9 @@ int main(int argc, char* argv[]) {
                                     strncat(client_data.status_message, line,
                                             sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
                                 }
+                            
                             }
-
+                            display_response_message(&client_data, response);
                             client_data.current_state = STATE_CHOOSE_GAME_SPECTATE;
                         } else {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -559,6 +581,7 @@ int main(int argc, char* argv[]) {
                         if (response->status_code == 1) {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "Now spectating game %d...", chosen_id);
+                            display_response_message(&client_data, response);
                             client_data.current_state = STATE_SPECTATING;
                         } else {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -623,6 +646,7 @@ int main(int argc, char* argv[]) {
                                     sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
                         }
                     }
+                    display_response_message(&client_data, response);
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "No saved games found.");
@@ -699,6 +723,7 @@ int main(int argc, char* argv[]) {
             if (response && response->status_code == 1 && response->body_size > 0) {
                 snprintf(client_data.status_message, sizeof(client_data.status_message),
                         "Now reviewing: %s\n%s", client_data.selected_game_name, response->body[0]);
+                        display_response_message(&client_data, response);
             } else {
                 snprintf(client_data.status_message, sizeof(client_data.status_message),
                         "Failed to load game content.");
@@ -772,7 +797,7 @@ int main(int argc, char* argv[]) {
                     strncat(client_data.status_message,
                     "\nType 'new chat' to start a new conversation.\n",
                     sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
-
+                    display_response_message(&client_data, response);
                     client_data.current_state = STATE_CHOOSE_CHAT;
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -858,6 +883,7 @@ int main(int argc, char* argv[]) {
                                     sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
                         }
                     }
+                    display_response_message(&client_data, response);
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "No messages yet with %s.\n", client_data.selected_chat_user);
@@ -908,6 +934,7 @@ int main(int argc, char* argv[]) {
                     strncat(client_data.status_message, line,
                             sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
                     client_data.pending_message[0] = '\0';
+                    display_response_message(&client_data, response);
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Failed to send message to %s.", client_data.selected_chat_user);
@@ -957,6 +984,7 @@ int main(int argc, char* argv[]) {
 
                     // Retourne à l’écran de sélection de chat
                     client_data.current_state = STATE_CHOOSE_CHAT;
+                    display_response_message(&client_data, response);
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Failed to create chat with %s.", target_user);
@@ -1011,7 +1039,7 @@ int main(int argc, char* argv[]) {
                     strncat(client_data.status_message,
                             "\nType 'add friend' to add a friend or 'remove friend' to remove one.\n",
                             sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
-
+                    display_response_message(&client_data, response);
                     client_data.current_state = STATE_RETRIEVE_FRIENDS;  // reste ici pour la saisie
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -1069,6 +1097,7 @@ int main(int argc, char* argv[]) {
                 if (response && response->status_code == 1) {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Friend '%s' added successfully.", username);
+                    display_response_message(&client_data, response);
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Failed to add friend '%s'.", username);
@@ -1107,6 +1136,7 @@ int main(int argc, char* argv[]) {
                 if (response && response->status_code == 1) {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Friend '%s' removed successfully.", username);
+                    display_response_message(&client_data, response);
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Failed to remove friend '%s'.", username);
