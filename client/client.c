@@ -342,7 +342,6 @@ int main(int argc, char* argv[]) {
                     // Free memory of response
                     for (int i = 0; i < response->body_size; i++)
                         free(response->body[i]);
-                    free(response->body);
                     free(response);
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -377,9 +376,9 @@ int main(int argc, char* argv[]) {
                             strcpy(list_buffer, "Current Challenges:\n");
 
                             for (int i = 0; i < response->body_size; i++) {
-                                strcat(list_buffer, "- ");
-                                strcat(list_buffer, response->body[i]);
-                                strcat(list_buffer, "\n");
+                                strncat(list_buffer, "- ", sizeof(list_buffer) - strlen(list_buffer) - 1);
+                                strncat(list_buffer, response->body[i], sizeof(list_buffer) - strlen(list_buffer) - 1);
+                                strncat(list_buffer, "\n", sizeof(list_buffer) - strlen(list_buffer) - 1);
                             }
 
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -853,7 +852,7 @@ int main(int argc, char* argv[]) {
                             char* sender = response->body[i];
                             char* msg = sep + 1;
 
-                            char line[300];
+                            char line[512];
                             snprintf(line, sizeof(line), "[%s]: %s\n", sender, msg);
                             strncat(client_data.status_message, line,
                                     sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
@@ -903,7 +902,7 @@ int main(int argc, char* argv[]) {
             if (res == 0) {
                 Response* response = receive_and_deserialize_Response(socket_fd);
                 if (response && response->status_code == 1) {
-                    char line[300];
+                    char line[512];
                     snprintf(line, sizeof(line), "[%s]: %s\n",
                             client_data.username, client_data.pending_message);
                     strncat(client_data.status_message, line,

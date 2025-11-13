@@ -39,7 +39,7 @@ typedef struct {
     int socket_fd;
 
     char username[251];
-    char status_message[1024];
+    char status_message[2048];
     char bio[256];
 
     int game_ids[1000];
