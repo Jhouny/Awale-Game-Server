@@ -49,7 +49,7 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
         printf("User %s successfully logged in.\n", username);
 
 		// Associate file_descriptor with username
-		insert(cmdGlobals.user_fds, username, fd_string);
+		insert(cmdGlobals.user_fds, fd_string, username);
 
         res->status_code = 1; // Success
         return res;
@@ -84,6 +84,31 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
         printf("User %s successfully signed up.\n", username);
         res->status_code = 1; // Success
         return res;
+    } else if (strcmp(cmd->command, "RETRIEVE_ONLINE_USERS") == 0) {
+        if (cmd->args_size != 0) {
+            printf("Invalid number of arguments for %s command.\n", cmd->command);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Invalid number of arguments for %s.", cmd->command);
+            return res;
+        }
+        // Retrieve online users from user_fds table
+        for (int i = 0; i < cmdGlobals.user_fds->size; i++) {
+            entry* curr = cmdGlobals.user_fds->entries[i];
+            if (!curr->free) {
+                res->body[res->body_size] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+                if (res->body[res->body_size] == NULL) {
+                    printf("Error allocating memory for online username in response body.\n");
+                    res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for online username.");
+                    return res;
+                }
+                strcpy(res->body[res->body_size++], curr->value);
+                // Add commas between usernames except for the last one
+                if (i < cmdGlobals.user_fds->size - 1) {
+                    strcat(res->body, ",");
+                }
+            }
+        }
+        res->status_code = 1; // Success
+        return res;
     } else if (strcmp(cmd->command, "RETRIEVE_CHALLENGES") == 0) {
         if (cmd->args_size != 0) {
             printf("Invalid number of arguments for %s command.\n", cmd->command);
@@ -105,9 +130,17 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
 			for (int i = 0; i < MAX_VALUE_LEN; i++) {
 				char currUsername[MAX_ARG_LEN];
 				int currIndex = 0;
-				while (challenges_list[i] != ',') {
-					currUsername[currIndex++] = challenges_list[i];
+				while (challenges_list[i] != ',' && challenges_list[i] != '\0') {
+					currUsername[currIndex++] = challenges_list[i++];
 				}
+                //strcpy(res->body[res->body_size++], currUsername);
+                currUsername[currIndex] = '\0';
+                res->body[res->body_size] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+                if (res->body[res->body_size] == NULL) {
+                    printf("Error allocating memory for challenge username in response body.\n");
+                    res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for challenge username.");
+                    return res;
+                }
                 strcpy(res->body[res->body_size++], currUsername);
                 if (challenges_list[i] == '\0')
                     break;
@@ -131,6 +164,18 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "No registered username for fd %d.\n", client_socket_fd);
             return res;
         }
+        table* users_table = get_table(cmdGlobals.db, "users", 0);
+        if (users_table == NULL) {
+            printf("Users table not found in database.\n");
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Users table not found.");
+            return res;
+        }
+        if (get(users_table, challenged_username) == NULL) {
+            printf("Challenged username %s does not exist.\n", challenged_username);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Challenged username does not exist.");
+            return res;
+        }
+
         // Add challenge to the challenges table
         char* existing_challenges = get(cmdGlobals.challenges, challenged_username);
         char new_challenge_entry[MAX_VALUE_LEN];
@@ -166,7 +211,14 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             return res;
         }
         res->status_code = 1; // Success
-        res->message_size = snprintf(res->message, MAX_ARG_LEN, "%s", bio);
+        res->body_size = 1;
+        res->body[0] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+        if (res->body[0] == NULL) {
+            printf("Error allocating memory for bio in response body.\n");
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for bio.");
+            return res;
+        }
+        strcpy(res->body[0], bio);
         return res;
     } else if (strcmp(cmd->command, "WRITE_BIO") == 0) {
         if (cmd->args_size != 1) {

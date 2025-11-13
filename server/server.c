@@ -110,6 +110,14 @@ int main(int argc, char* argv[]) {
 						break;
 					}
 
+					// Log response
+					printf("Sending response with status code %d and body size %d to client socket %d.\n", res->status_code,  res->body_size, client_sockets_fd[i].fd);
+					fflush(stdout);
+					for (int j = 0; j < res->body_size; j++) {
+						printf("  - Body[%d]: %s\n", j, res->body[j]);
+					}
+					fflush(stdout);
+
 					// Send response back to client
 					if (serialize_and_send_Response(client_sockets_fd[i].fd, res) != 0) {
 						printf("Error sending response to client. Closing connection.\n");

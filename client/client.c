@@ -89,12 +89,6 @@ int main(int argc, char* argv[]) {
     };
     pthread_mutex_init(&client_data.data_mutex, NULL);
 
-    pthread_t notif_thread;
-    if (pthread_create(&notif_thread, NULL, challenge_simulator, &client_data) != 0) {
-        perror("Failed to create notification thread");
-        return 1;
-    }
-
     int needs_redraw = 1;
 
     while (client_data.current_state != STATE_EXIT) {
@@ -109,7 +103,6 @@ int main(int argc, char* argv[]) {
         if (needs_redraw) {
             pthread_mutex_lock(&client_data.data_mutex);
             char* output = render_client_state_text(&client_data);
-            client_data.status_message[0] = '\0';
             pthread_mutex_unlock(&client_data.data_mutex);
             
             printf("%s", output);
@@ -145,6 +138,7 @@ int main(int argc, char* argv[]) {
                 needs_redraw = 1;
             }
             else if (key == KEY_ENTER) {
+                client_data.status_message[0] = '\0';
                 switch (client_data.selected_menu_option) {
                     case 0: client_data.current_state = STATE_CHALLENGE; break;
                     case 1: client_data.current_state = STATE_WRITE_BIO; break;
@@ -186,7 +180,9 @@ int main(int argc, char* argv[]) {
             else
                 snprintf(client_data.status_message, sizeof(client_data.status_message), "Failed to send bio.");
 
-            // back to home
+            receive_and_deserialize_Response(socket_fd); // Ignore response for now
+
+            // Back to home
             client_data.current_state = STATE_HOME;
             needs_redraw = 1;
         }
@@ -347,7 +343,6 @@ int main(int argc, char* argv[]) {
             if (res == 0) {
                 // Attendre la réponse du serveur
                 Response* response = receive_and_deserialize_Response(socket_fd);
-
                 if (response != NULL) {
                     if (response->status_code == 1 && response->body_size > 0) {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -378,8 +373,8 @@ int main(int argc, char* argv[]) {
 
         else if (current_state == STATE_VIEW_CHALLENGES) {
 
-                // Créer la commande RETRIEVE_CHALLENGE sans argument
-                Command* cmd = createCommand("RETRIEVE_CHALLENGE", NULL, 0);
+                // Créer la commande RETRIEVE_CHALLENGES sans argument
+                Command* cmd = createCommand("RETRIEVE_CHALLENGES", NULL, 0);
                 int res = serialize_and_send_Command(socket_fd, cmd);
 
                 pthread_mutex_lock(&client_data.data_mutex);
@@ -421,7 +416,7 @@ int main(int argc, char* argv[]) {
                     }
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Failed to send RETRIEVE_CHALLENGE command.");
+                            "Failed to send RETRIEVE_CHALLENGES command.");
                 }
 
                 client_data.current_state = STATE_HOME;
@@ -1182,7 +1177,6 @@ int main(int argc, char* argv[]) {
     }
 
     pthread_mutex_destroy(&client_data.data_mutex);
-    pthread_join(notif_thread, NULL);
 
     disable_alternate_buffer();
 

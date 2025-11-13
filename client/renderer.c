@@ -78,6 +78,11 @@ char* render_client_state_text(const ClientData* data) {
 
         case STATE_WRITE_BIO:
             strcat(buffer, "WRITE BIO\n\nEnter your new bio (250 caracters).\nType 'back' to return to home.\n");
+            if (strlen(data->status_message) > 0) {
+                strcat(buffer, "\n\033[32m");
+                strcat(buffer, data->status_message);
+                strcat(buffer, "\033[0m\n");
+            }
             break;
 
         case STATE_CHOOSE_GAME_SPECTATE:
