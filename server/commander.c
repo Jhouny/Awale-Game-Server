@@ -180,7 +180,7 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "No registered username for fd %d.\n", client_socket_fd);
             return res;
         }
-        table* bios_table = get_table(cmdGlobals.db, "bios", 0);
+        table* bios_table = get_table(cmdGlobals.db, "bio", 0);
         if (bios_table == NULL) {
             printf("Bios table not found in database.\n");
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Bios table not found.");
