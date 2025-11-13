@@ -224,6 +224,7 @@ int main(int argc, char* argv[]) {
 
                         if (response != NULL && response->status_code == 1) {
                             snprintf(client_data.status_message, sizeof(client_data.status_message), "Login successful. Welcome %s!", username);
+                            strncpy(client_data.username, username, sizeof(client_data.username) - 1);
                             client_data.current_state = STATE_HOME;
                             free(response);
                         } else {
@@ -770,10 +771,9 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-        else if (current_state == STATE_CHOOSE_CHAT) {
+        else if (current_state == STATE_RETRIEVE_CHATS) {
             fflush(stdout);
 
-            // Commande simple sans argument
             Command* cmd = createCommand("RETRIEVE_CHATS", NULL, 0);
             int res = serialize_and_send_Command(socket_fd, cmd);
 
@@ -782,39 +782,39 @@ int main(int argc, char* argv[]) {
             if (res == 0) {
                 Response* response = receive_and_deserialize_Response(socket_fd);
 
-                if (response != NULL) {
-                    if (response->status_code == 1 && response->body_size > 0) {
-                        snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                "You have conversations with:\n");
+                if (response && response->status_code == 1 && response->body_size > 0) {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "You have conversations with:\n");
 
-                        client_data.chat_count = 0;
+                    client_data.chat_count = 0;
 
-                        for (int i = 0; i < response->body_size; i++) {
-                            char *username = response->body[i];
-                            snprintf(client_data.chat_usernames[client_data.chat_count],
-                                    sizeof(client_data.chat_usernames[client_data.chat_count]),
-                                    "%s", username);
-                            client_data.chat_count++;
+                    for (int i = 0; i < response->body_size; i++) {
+                        snprintf(client_data.chat_usernames[i],
+                                sizeof(client_data.chat_usernames[i]), "%s", response->body[i]);
 
-                            char line[256];
-                            snprintf(line, sizeof(line), "  %d - %s\n", i + 1, username);
-                            strncat(client_data.status_message, line,
-                                    sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
-                        }
+                        char line[256];
+                        snprintf(line, sizeof(line), "  %d - %s\n", i + 1, response->body[i]);
+                        strncat(client_data.status_message, line,
+                                sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
 
-                        client_data.current_state = STATE_SELECT_CHAT_USER;
-                    } else {
-                        snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                "No previous conversations found.");
-                        client_data.current_state = STATE_HOME;
+                        client_data.chat_count++;
                     }
 
-                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
-                    free(response);
+                    // Ajoute l'option pour créer un nouveau chat
+                    strncat(client_data.status_message,
+                    "\nType 'new chat' to start a new conversation.\n",
+                    sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+
+                    client_data.current_state = STATE_CHOOSE_CHAT;
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "No response from server.");
+                            "No previous conversations found.");
                     client_data.current_state = STATE_HOME;
+                }
+
+                if (response) {
+                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                    free(response);
                 }
             } else {
                 snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -826,19 +826,95 @@ int main(int argc, char* argv[]) {
             needs_redraw = 1;
         }
 
+
+        else if (current_state == STATE_CHOOSE_CHAT) {
+            fflush(stdout);
+
+            char input[251];
+            if (fgets(input, sizeof(input), stdin) == NULL) continue;
+            input[strcspn(input, "\n")] = '\0'; // Enlève le \n
+
+            // ✅ Nouveau chat demandé
+            if (strcmp(input, "new chat") == 0) {
+                client_data.current_state = STATE_CREATE_CHAT;
+                needs_redraw = 1;
+                continue;
+            }
+            int choice = atoi(input);
+            if (choice <= 0 || choice > client_data.chat_count) {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Invalid choice. Try again.");
+                needs_redraw = 1;
+                continue;
+            }
+
+            pthread_mutex_lock(&client_data.data_mutex);
+            client_data.selected_chat_index = choice - 1;
+            snprintf(client_data.selected_chat_user, sizeof(client_data.selected_chat_user),
+                    "%s", client_data.chat_usernames[client_data.selected_chat_index]);
+            pthread_mutex_unlock(&client_data.data_mutex);
+
+            // Passe à l’état d’ouverture du chat
+            client_data.current_state = STATE_CHATTING;
+            needs_redraw = 1;
+        }
+
         else if (current_state == STATE_CHATTING) {
             fflush(stdout);
 
+            // Ouvre le chat : demande l’historique
+            char* args[1] = { client_data.selected_chat_user };
+            Command* cmd = createCommand("OPEN_CHAT", args, 1);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+
+            pthread_mutex_lock(&client_data.data_mutex);
+
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+
+                if (response && response->status_code == 1 && response->body_size > 0) {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Chat with %s:\n", client_data.selected_chat_user);
+
+                    for (int i = 0; i < response->body_size; i++) {
+                        // Chaque body[i] est "username,message"
+                        char* sep = strchr(response->body[i], ',');
+                        if (sep) {
+                            *sep = '\0';
+                            char* sender = response->body[i];
+                            char* msg = sep + 1;
+
+                            char line[300];
+                            snprintf(line, sizeof(line), "[%s]: %s\n", sender, msg);
+                            strncat(client_data.status_message, line,
+                                    sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                        }
+                    }
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "No messages yet with %s.\n", client_data.selected_chat_user);
+                }
+
+                if (response) {
+                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                    free(response);
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to open chat with %s.", client_data.selected_chat_user);
+            }
+
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+
+            // Attente de saisie d’un message
             char message[251];
             if (fgets(message, sizeof(message), stdin) == NULL)
                 continue;
+            message[strcspn(message, "\n")] = '\0';
 
-            message[strcspn(message, "\n")] = '\0'; // Retire le \n
-
-            // Message vide : on ignore
             if (strlen(message) == 0) continue;
 
-            // On passe à l’état SEND_MSG pour traiter l’envoi
             pthread_mutex_lock(&client_data.data_mutex);
             strncpy(client_data.pending_message, message, sizeof(client_data.pending_message) - 1);
             client_data.current_state = STATE_SEND_MSG;
@@ -846,6 +922,241 @@ int main(int argc, char* argv[]) {
             needs_redraw = 1;
         }
 
+        else if (current_state == STATE_SEND_MSG) {
+            fflush(stdout);
+
+            char* args[2] = { client_data.selected_chat_user, client_data.pending_message };
+            Command* cmd = createCommand("SEND_MSG", args, 2);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+
+            pthread_mutex_lock(&client_data.data_mutex);
+
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+                if (response && response->status_code == 1) {
+                    char line[300];
+                    snprintf(line, sizeof(line), "[%s]: %s\n",
+                            client_data.username, client_data.pending_message);
+                    strncat(client_data.status_message, line,
+                            sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                    client_data.pending_message[0] = '\0';
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to send message to %s.", client_data.selected_chat_user);
+                }
+
+                if (response) {
+                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                    free(response);
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send SEND_MSG command.");
+            }
+
+            client_data.current_state = STATE_CHATTING;
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
+
+        else if (current_state == STATE_CREATE_CHAT) {
+            fflush(stdout);
+
+            printf("Enter the username of the person you want to chat with: ");
+            char target_user[251];
+            if (fgets(target_user, sizeof(target_user), stdin) == NULL) continue;
+            target_user[strcspn(target_user, "\n")] = '\0';
+
+            // Envoie la commande CREATE_CHAT
+            char* args[1] = { target_user };
+            Command* cmd = createCommand("CREATE_CHAT", args, 1);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+
+            pthread_mutex_lock(&client_data.data_mutex);
+
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+
+                if (response && response->status_code == 1 && response->body_size > 0) {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Chat created successfully with %s (ID: %s)\n",
+                            target_user, response->body[0]);
+
+                    // Ajoute à la liste locale des chats existants
+                    snprintf(client_data.chat_usernames[client_data.chat_count],
+                            sizeof(client_data.chat_usernames[client_data.chat_count]), "%s", target_user);
+                    client_data.chat_count++;
+
+                    // Retourne à l’écran de sélection de chat
+                    client_data.current_state = STATE_CHOOSE_CHAT;
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to create chat with %s.", target_user);
+                    client_data.current_state = STATE_CHOOSE_CHAT;
+                }
+
+                if (response) {
+                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                    free(response);
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send CREATE_CHAT command.");
+                client_data.current_state = STATE_CHOOSE_CHAT;
+            }
+
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
+
+        else if (current_state == STATE_RETRIEVE_FRIENDS) {
+            fflush(stdout);
+
+            // Envoi de la commande pour récupérer les amis, sans argument
+            Command* cmd = createCommand("RETRIEVE_FRIENDS", NULL, 0);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+
+            pthread_mutex_lock(&client_data.data_mutex);
+
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+
+                if (response && response->status_code == 1 && response->body_size > 0) {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Your friends:\n");
+
+                    client_data.friends_count = 0;
+
+                    for (int i = 0; i < response->body_size; i++) {
+                        snprintf(client_data.friends_usernames[i],
+                                sizeof(client_data.friends_usernames[i]), "%s", response->body[i]);
+
+                        char line[256];
+                        snprintf(line, sizeof(line), "  %d - %s\n", i + 1, response->body[i]);
+                        strncat(client_data.status_message, line,
+                                sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+
+                        client_data.friends_count++;
+                    }
+
+                    // Instructions pour l’utilisateur
+                    strncat(client_data.status_message,
+                            "\nType 'add friend' to add a friend or 'remove friend' to remove one.\n",
+                            sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+
+                    client_data.current_state = STATE_RETRIEVE_FRIENDS;  // reste ici pour la saisie
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "You have no friends.\nType 'add friend' to add one.");
+                    client_data.friends_count = 0;
+                    client_data.current_state = STATE_RETRIEVE_FRIENDS;
+                }
+
+                if (response) {
+                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                    free(response);
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send retrieve friends command.");
+                client_data.current_state = STATE_HOME;
+            }
+
+            char input[251];
+            if (fgets(input, sizeof(input), stdin) == NULL) continue;
+            input[strcspn(input, "\n")] = '\0';
+
+            if (strcmp(input, "add friend") == 0) {
+                client_data.current_state = STATE_ADD_FRIEND;
+                needs_redraw = 1;
+            } else if (strcmp(input, "remove friend") == 0) {
+                client_data.current_state = STATE_REMOVE_FRIEND;
+                needs_redraw = 1;
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Invalid command. Type 'add friend' or 'remove friend'.");
+                needs_redraw = 1;
+            }
+
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
+
+        else if (current_state == STATE_ADD_FRIEND) {
+            fflush(stdout);
+            printf("Enter the username to add as friend: ");
+            char username[251];
+            if (fgets(username, sizeof(username), stdin) == NULL) continue;
+            username[strcspn(username, "\n")] = '\0';
+
+            char* args[1] = { username };
+            Command* cmd = createCommand("ADD_FRIEND", args, 1);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+
+            pthread_mutex_lock(&client_data.data_mutex);
+
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+
+                if (response && response->status_code == 1) {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Friend '%s' added successfully.", username);
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to add friend '%s'.", username);
+                }
+
+                if (response) {
+                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                    free(response);
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send ADD_FRIEND command.");
+            }
+
+            client_data.current_state = STATE_RETRIEVE_FRIENDS;
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
+
+        else if (current_state == STATE_REMOVE_FRIEND) {
+            fflush(stdout);
+            printf("Enter the username to remove from friends: ");
+            char username[251];
+            if (fgets(username, sizeof(username), stdin) == NULL) continue;
+            username[strcspn(username, "\n")] = '\0';
+
+            char* args[1] = { username };
+            Command* cmd = createCommand("REMOVE_FRIEND", args, 1);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+
+            pthread_mutex_lock(&client_data.data_mutex);
+
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+
+                if (response && response->status_code == 1) {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Friend '%s' removed successfully.", username);
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to remove friend '%s'.", username);
+                }
+
+                if (response) {
+                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                    free(response);
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send REMOVE_FRIEND command.");
+            }
+
+            client_data.current_state = STATE_RETRIEVE_FRIENDS;
+            pthread_mutex_unlock(&client_data.data_mutex);
+            needs_redraw = 1;
+        }
 
         else {
             // Canonical mode for text input

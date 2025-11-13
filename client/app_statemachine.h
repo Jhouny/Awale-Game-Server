@@ -18,9 +18,14 @@ typedef enum {
     STATE_CHOOSE_GAME_TO_REVIEW,
     STATE_REVIEWING,
     STATE_RETRIEVE_BIO,
-    STATE_CHOOSE_CHAT,
-    STATE_CHATTING,
-    STATE_FRIENDS,
+    STATE_RETRIEVE_CHATS, 
+    STATE_CHOOSE_CHAT,     
+    STATE_CHATTING, 
+    STATE_SEND_MSG,
+    STATE_CREATE_CHAT, 
+    STATE_RETRIEVE_FRIENDS,
+    STATE_ADD_FRIEND,
+    STATE_REMOVE_FRIEND,,
     STATE_EXIT 
 } ClientState;
 
@@ -32,17 +37,24 @@ typedef struct {
     int challenges_updated;
     pthread_mutex_t data_mutex;
     int socket_fd;
-    char status_message[256];
+
+    char username[251];
+    char status_message[1024];
     char bio[256];
+
     int game_ids[1000];
     int game_count;
     char game_names[1000][1000];
     char selected_game_name[1000];
+
     char chat_usernames[1000][251];
     int chat_count;
+    int selected_chat_index;
     char selected_chat_user[251];
-    char selected_chat_user[251];
-    char pending_message[251]; 
+    char pending_message[251];
+
+    char friends_usernames[1000][251];
+    int friends_count;
 } ClientData;
 
 #endif

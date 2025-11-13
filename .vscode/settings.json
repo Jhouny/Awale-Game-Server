@@ -7,6 +7,12 @@
         "network.h": "c",
         "commander.h": "c",
         "database.h": "c",
-        "kvs.h": "c"
+        "kvs.h": "c",
+        "bitset": "c",
+        "fstream": "c",
+        "iomanip": "c",
+        "ostream": "c",
+        "sstream": "c",
+        "streambuf": "c"
     }
 }
