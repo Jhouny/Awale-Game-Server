@@ -478,56 +478,36 @@ int main(int argc, char* argv[]) {
                 if (res == 0) {
                     Response* response = receive_and_deserialize_Response(socket_fd);
                     if (response != NULL) {
-                        if (response->status_code == 1 && response->body_size > 0) {
+                        if (response->status_code == 1 && response->body_size >= 3 && response->body_size % 3 == 0) {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "Retrieved games:\n");
-                            //Strucuture attendu : [1,[Alice,Bob]],[2,[Imane,Kamel]],[3,[Louis,Joséphine]]
 
-                            char* data = malloc(strlen(response->body[0]) + 1);
-                            strncpy(data, response->body[0], strlen(response->body[0]) + 1);    
-                            char *token = strtok(data, "]");        // Coupe à chaque fin de bloc "],"
                             client_data.game_count = 0;
 
-                            while (token != NULL) {
-                                // Nettoyage : enlève les crochets ou virgules en trop
-                                while (*token == '[' || *token == ',' || *token == ' ') token++;
+                            for (int i = 0; i < response->body_size; i += 3) {
+                                char* id_str = response->body[i];
+                                char* player1 = response->body[i + 1];
+                                char* player2 = response->body[i + 2];
 
-                                // Exemple de token : "1,[Alice,Bob"
-                                char *id_str = strtok(token, ",");  // "1"
-                                char *players_str = strtok(NULL, ","); // "[Alice,Bob"
-
-                                if (id_str && players_str) {
-                                    // Retire les crochets autour des joueurs
-                                    players_str = strchr(players_str, '[');
-                                    if (players_str) players_str++;
-                                    char *closing = strchr(players_str, ']');
-                                    if (closing) *closing = '\0';
-
-                                    // Sépare les deux joueurs
-                                    char *player1 = strtok(players_str, ",");
-                                    char *player2 = strtok(NULL, ",");
-
+                                if (id_str && player1 && player2) {
                                     client_data.game_ids[client_data.game_count++] = atoi(id_str);
 
                                     char line[256];
                                     snprintf(line, sizeof(line),
                                             "  - Game %s: %s vs %s\n",
-                                            id_str, player1 ? player1 : "?", player2 ? player2 : "?");
+                                            id_str, player1, player2);
 
                                     strncat(client_data.status_message, line,
                                             sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
                                 }
-
-                                token = strtok(NULL, "]"); // Passe au prochain bloc
                             }
 
-                            free(data);
-
-                             client_data.current_state = STATE_CHOOSE_GAME_SPECTATE;
+                            client_data.current_state = STATE_CHOOSE_GAME_SPECTATE;
                         } else {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "Failed to retrieve saved games.");
                         }
+
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
                                 "No response from server.");
@@ -625,40 +605,29 @@ int main(int argc, char* argv[]) {
 
                         client_data.game_count = 0;  // compteur local
 
-            for (int i = 0; i < response->body_size; i++) {
-                    // Exemple de response->body[i] : "[1,MonJeu]"
-                    char* copy = (char*)malloc(strlen(response->body[i]) + 1);
-                    strcpy(copy, response->body[i]);
-                    // Enlève '[' au début et ']' à la fin
-                    char* start = copy;
-                    if (*start == '[') start++;
-                    char* end = strchr(start, ']');
-                    if (end) *end = '\0';
+                    // Parcours du body 2 par 2 : id, nom
+                    for (int i = 0; i < response->body_size; i += 2) {
+                        char* id_str = response->body[i];
+                        char* name_str = (i + 1 < response->body_size) ? response->body[i + 1] : NULL;
 
-                    // Sépare l'id et le nom sur la virgule
-                    char* id_str = strtok(start, ",");
-                    char* name_str = strtok(NULL, ",");
+                        if (id_str && name_str) {
+                            client_data.game_ids[client_data.game_count] = atoi(id_str);
 
-                    if (id_str && name_str) {
-                        client_data.game_ids[client_data.game_count] = atoi(id_str);
+                            strncpy(client_data.game_names[client_data.game_count], name_str, 1000 - 1);
+                            client_data.game_names[client_data.game_count][1000 - 1] = '\0';
 
-                        // Copie du nom (avec gestion de la taille max)
-                        strncpy(client_data.game_names[client_data.game_count], name_str, 1000 - 1);
-                        client_data.game_names[client_data.game_count][1000 - 1] = '\0';
+                            client_data.game_count++;
 
-                        client_data.game_count++;
-
-                        char line[256];
-                        snprintf(line, sizeof(line), "  - Game %s: %s\n", id_str, name_str);
-                        strncat(client_data.status_message, line,
-                                sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                            char line[256];
+                            snprintf(line, sizeof(line), "  - Game %s: %s\n", id_str, name_str);
+                            strncat(client_data.status_message, line,
+                                    sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                        }
                     }
-                    free(copy);
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "No saved games found.");
                 }
-                    } else {
-                        snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                "No saved games found.");
-                    }
                     for (int i = 0; i < response->body_size; i++)
                         free(response->body[i]);
                     free(response);
