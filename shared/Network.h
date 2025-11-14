@@ -15,6 +15,7 @@ typedef struct Awale_Network {
     uint8_t scores[2];   // Scores for each player
     uint8_t gameOver; // int for portability over the network (padding)
     char lastPlayer[250]; // The player who made the last move
+    char playernames[2][250];
     int8_t winner; // -1 if no winner, 0 or 1 for players
 } Awale_Network;
 

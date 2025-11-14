@@ -1205,7 +1205,9 @@ int main(int argc, char* argv[]) {
             snprintf(client_data.selected_chat_user, sizeof(client_data.selected_chat_user),
                     "%s", client_data.chat_usernames[client_data.selected_chat_index]);
             pthread_mutex_unlock(&client_data.data_mutex);
-            char *chat_key = client_data.username;
+            char chat_key[256];
+            strncpy(chat_key, client_data.username, sizeof(chat_key) - 1);
+            chat_key[sizeof(chat_key) - 1] = '\0';
             strcat(chat_key, "_");
             strcat(chat_key, client_data.selected_chat_user);
             strncpy(client_data.current_chat, chat_key, sizeof(client_data.current_chat));
@@ -1225,7 +1227,7 @@ int main(int argc, char* argv[]) {
 
             if (res == 0) {
                 Response* response = receive_and_deserialize_Response(socket_fd);
-
+                
                 if (response && response->status_code == 1 && response->body_size > 0) {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Chat with %s:\n", client_data.selected_chat_user);
@@ -1238,10 +1240,7 @@ int main(int argc, char* argv[]) {
                             char* sender = response->body[i];
                             char* msg = sep + 1;
 
-                            char line[512];
-                            snprintf(line, sizeof(line), "[%s]: %s\n", sender, msg);
-                            strncat(client_data.status_message, line,
-                                    sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                            printf("[%s]: %s\n", sender, msg);
                         }
                     }
                     display_response_message(&client_data, response);
@@ -1272,15 +1271,23 @@ int main(int argc, char* argv[]) {
             fflush(stdout);
             
             if (strcmp(message, "back") == 0) {
-                    client_data.current_state = STATE_HOME;
-                    client_data.selected_menu_option = 0;
-                    needs_redraw = 1;
-                    continue;
-                }
+                client_data.current_state = STATE_HOME;
+                client_data.selected_menu_option = 0;
+                needs_redraw = 1;
+                continue;
+            }
 
-            char* args[2] = { client_data.username, message };
+            char* args[2];
+            args[0] = malloc(256);
+            args[1] = malloc(256);
+            strncpy(args[0], client_data.username, sizeof(args[0]) - 1);
             strcat(args[0], "_");
             strcat(args[0], client_data.selected_chat_user);
+            strncpy(args[1], message, 256);
+            args[1][255] = '\0';
+            printf("Sending '%s' to chat %s...\n", args[1], args[0]);
+            printf("Message was: %s\n", message);
+            sleep(2);
             Command* cmd = createCommand("SEND_MSG", args, 2);
             int res2 = serialize_and_send_Command(socket_fd, cmd);
 

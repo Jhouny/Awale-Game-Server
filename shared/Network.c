@@ -10,6 +10,8 @@ Awale_Network serializeAwale(const Awale* game) {
     netGame.scores[1] = (uint8_t)game->scores[1];
     netGame.gameOver = game->gameOver ? 1 : 0;
 	strncpy(netGame.lastPlayer, game->lastPlayer, 250);
+	strncpy(netGame.playernames[0], game->playernames[0], 250);
+	strncpy(netGame.playernames[1], game->playernames[1], 250);
     netGame.winner = (int8_t)game->winner;
     return netGame;
 }

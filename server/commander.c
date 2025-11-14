@@ -624,11 +624,19 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
         }
         char* chat_history = get(chats_table, chat_key);
         if (chat_history == NULL) {
-            res->message_size = snprintf(res->message, MAX_ARG_LEN, "No chat history found for chat %s.", chat_key);
-            return res;
+            // Try the reverse key
+            char reverse_chat_key[MAX_ARG_LEN];
+            char user1[MAX_ARG_LEN], user2[MAX_ARG_LEN];
+            sscanf(chat_key, "%[^_]_%s", user1, user2);
+            snprintf(reverse_chat_key, MAX_ARG_LEN, "%s_%s", user2, user1);
+            chat_history = get(chats_table, reverse_chat_key);
+            if (chat_history == NULL) {
+                res->message_size = snprintf(res->message, MAX_ARG_LEN, "No chat history found for chat %s.", chat_key);
+                return res;
+            }
         }
         // Split chat_history by 'username-message|username-message|...'
-        for (int i = 0; i < MAX_VALUE_LEN; i++) {
+        for (int i = 1; i < MAX_VALUE_LEN; i++) {
             // Get user who sent the message
             char sender_username[MAX_ARG_LEN];
             int sender_index = 0;
@@ -640,7 +648,7 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             if (chat_history[i] == '\0')
                 break;
             i++; // Skip '-'
-            
+           
             // Get the message content
             char message_content[MAX_ARG_LEN];
             int message_index = 0;
@@ -652,10 +660,16 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             // Format: "sender,message"
             char formatted_message[MAX_ARG_LEN];
             snprintf(formatted_message, MAX_ARG_LEN, "%s,%s", sender_username, message_content);
+            printf("Retrieved message from user %s: %s\n", sender_username, message_content);
+            res->body[res->body_size] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+            if (res->body[res->body_size] == NULL) {
+                printf("Error allocating memory for chat message in response body.\n");
+                res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for chat message.");
+                return res;
+            }
             strcpy(res->body[res->body_size++], formatted_message);
             if (chat_history[i] == '\0')
                 break;
-            i++; // Skip '|'
         }
         res->status_code = 1; // Success
         return res;
@@ -680,13 +694,32 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             return res;
         }
         char* existing_chat_history = get(chats_table, chat_key);
+        char reverse_chat_key[MAX_ARG_LEN];
+        reverse_chat_key[0] = '\0';
         char new_chat_entry[MAX_VALUE_LEN];
-        if (existing_chat_history == NULL)
-            snprintf(new_chat_entry, MAX_VALUE_LEN, "%s-%s", sender_username, message_content);
-        else
-            snprintf(new_chat_entry, MAX_VALUE_LEN, "%s|%s-%s", existing_chat_history, sender_username, message_content);
         
-        if (!insert(chats_table, chat_key, new_chat_entry)) {
+        if (existing_chat_history == NULL) {
+            // Try the reverse key
+            char user1[MAX_ARG_LEN], user2[MAX_ARG_LEN];
+            sscanf(chat_key, "%[^_]_%s", user1, user2);
+            snprintf(reverse_chat_key, MAX_ARG_LEN, "%s_%s", user2, user1);
+            existing_chat_history = get(chats_table, reverse_chat_key);
+            if (existing_chat_history == NULL) {
+                snprintf(new_chat_entry, MAX_VALUE_LEN, "%s-%s", sender_username, message_content);
+            } else {
+                snprintf(new_chat_entry, MAX_VALUE_LEN, "%s|%s-%s", existing_chat_history, sender_username, message_content);
+            }
+        } else {
+            snprintf(new_chat_entry, MAX_VALUE_LEN, "%s|%s-%s", existing_chat_history, sender_username, message_content);
+        }
+        printf("New chat entry for chat %s: %s\n", chat_key, new_chat_entry);
+        char final_chat_key[MAX_ARG_LEN];
+        if (reverse_chat_key[0] != '\0')
+            strcpy(final_chat_key, reverse_chat_key);
+        else
+            strcpy(final_chat_key, chat_key);
+
+        if (!insert(chats_table, final_chat_key, new_chat_entry)) {
             printf("Error inserting message into chats table.\n");
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't insert message into database.");
             return res;
@@ -718,7 +751,7 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             return res;
         }
         // Initialize empty chat history
-        if (!insert(chats_table, chat_key, "")) {
+        if (!insert(chats_table, chat_key, "\0")) {
             printf("Error creating new chat in chats table.\n");
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't create new chat in database.");
             return res;
