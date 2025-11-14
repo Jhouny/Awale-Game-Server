@@ -15,3 +15,8 @@ For the client : ./bin/client 'IP adress' 'port'
 
 We used AI to accelerate development in parts of the project where the logic was repetitive—for example, sending messages to the server and handling the responses in each state. It also helped us debug certain sections of the code.
 However, we did not rely on AI to design the project structure, define the different states, or create the communication protocol. All of that was planned and implemented by us, as shown in the document data/Prog Reseau – Projet AWALE STRUCTURE.pdf.
+
+## Planning
+
+![Planning Diagram 1](data/image.png)
+![Planning Diagram 2](data/image%20copy.png)
