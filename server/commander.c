@@ -429,8 +429,51 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
                      cmdGlobals.running_games[i]->game_id,
                      cmdGlobals.running_games[i]->playernames[0],
                      cmdGlobals.running_games[i]->playernames[1]);
-            strcpy(res->body[res->body_size++], game_info);
+            res->body[res->body_size] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+            if (res->body[res->body_size] == NULL) {
+                printf("Error allocating memory for game info in response body.\n");
+                res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for game info.");
+                return res;
+            }
+            strncpy(res->body[res->body_size++], game_info, MAX_ARG_LEN);
         }
+        return res;
+    } else if (strcmp(cmd->command, "UPDATE_SPECTATE") == 0) {
+        if (cmd->args_size != 0) {
+            printf("Invalid number of arguments for %s command.\n", cmd->command);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Invalid number of arguments for %s.", cmd->command);
+            return res;
+        }
+        // Find the game instance being spectated by this fd
+        Awale* game = NULL;
+        for (size_t i = 0; i < cmdGlobals.running_games_count; i++) {
+            Awale* curr_game = cmdGlobals.running_games[i];
+            for (size_t j = 0; j < curr_game->spectators_count; j++) {
+                if (curr_game->spectators_fds[j] == client_socket_fd) {
+                    game = curr_game;
+                    break;;
+                }
+            }
+            if (game != NULL)
+                break;
+        }
+
+        if (game == NULL) {
+            printf("User not found in any spectator list in active games.\n");
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "No active game found for user.");
+            return res;
+        }
+
+        Awale_Network net_game = serializeAwale(game);
+        res->body[0] = (char*) malloc(sizeof(Awale_Network));
+        if (res->body[0] == NULL) {
+            printf("Error allocating memory for game in response body.\n");
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for game.");
+            return res;
+        }
+        memcpy(res->body[0], &net_game, sizeof(Awale_Network));
+        res->body_size = 1;
+        res->status_code = 1; // Success
         return res;
     } else if (strcmp(cmd->command, "SPECTATE") == 0) {
         if (cmd->args_size != 1) {
@@ -686,23 +729,33 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             return res;
         }
         // Split friends_list by commas and add to response body
-        for (int i = 0; i < MAX_VALUE_LEN; i++) {
-            char currFriend[MAX_ARG_LEN];
-            int currIndex = 0;
-            while (friends_list[i] != ',' && friends_list[i] != '\0') {
-                currFriend[currIndex++] = friends_list[i];
-                i++;
+         else {
+            int i = 0;
+            while (i < MAX_VALUE_LEN && friends_list[i] != '\0') {
+                char currFriend[MAX_ARG_LEN];
+                int currIndex = 0;
+                /* collect characters until comma or end, guard against overflow */
+                while (i < MAX_VALUE_LEN && friends_list[i] != ',' && friends_list[i] != '\0' && currIndex < (MAX_ARG_LEN - 1)) {
+                    currFriend[currIndex++] = friends_list[i++];
+                }
+                currFriend[currIndex] = '\0';
+                /* allocate space for the friend string in the response body */
+                res->body[res->body_size] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+                if (res->body[res->body_size] == NULL) {
+                    printf("Error allocating memory for friend username in response body.\n");
+                    res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for friend username.");
+                    return res;
+                }
+                /* ensure null-terminated copy */
+                strncpy(res->body[res->body_size], currFriend, MAX_ARG_LEN - 1);
+                res->body[res->body_size][MAX_ARG_LEN - 1] = '\0';
+                res->body_size++;
+                if (friends_list[i] == '\0')
+                    break;
+                /* skip the comma delimiter */
+                if (friends_list[i] == ',')
+                    i++;
             }
-            currFriend[currIndex] = '\0';
-            res->body[res->body_size] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
-            if (res->body[res->body_size] == NULL) {
-                printf("Error allocating memory for friend username in response body.\n");
-                res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for friend username.");
-                return res;
-            }
-            strncpy(res->body[res->body_size++], currFriend, MAX_ARG_LEN);
-            if (friends_list[i] == '\0')
-                break;
         }
         return res;
     } else if (strcmp(cmd->command, "ADD_FRIEND") == 0) {
@@ -724,6 +777,19 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Friends table not found.");
             return res;
         }
+
+        table* users_table = get_table(cmdGlobals.db, "users", 0);
+        if (users_table == NULL) {
+            printf("Users table not found in database.\n");
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Users table not found.");
+            return res;
+        }
+        if (get(users_table, new_friend_username) == NULL) {
+            printf("User %s does not exist.\n", new_friend_username);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "User %s does not exist.", new_friend_username);
+            return res;
+        }
+
         char* existing_friends = get(friends_table, username);
         char new_friends_entry[MAX_VALUE_LEN];
         if (existing_friends == NULL)
@@ -733,7 +799,10 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
                 res->message_size = snprintf(res->message, MAX_ARG_LEN, "User %s is already your friend.", new_friend_username);
                 return res;
             }
-            snprintf(new_friends_entry, MAX_VALUE_LEN, "%s,%s", existing_friends, new_friend_username);
+            if (strlen(existing_friends) == 0)
+                snprintf(new_friends_entry, MAX_VALUE_LEN, "%s", new_friend_username);
+            else
+                snprintf(new_friends_entry, MAX_VALUE_LEN, "%s,%s", existing_friends, new_friend_username);
         }
         // Update the friends table with the new friends list
         if (!insert(friends_table, username, new_friends_entry)) {
@@ -765,6 +834,9 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
         char* existing_friends = get(friends_table, username);
         if (existing_friends == NULL) {
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "No friends found for user %s.", username);
+            return res;
+        } else if (strstr(existing_friends, remove_friend_username) == NULL) {
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "User %s is not in your friends list.", remove_friend_username);
             return res;
         }
         // Remove the specified friend from the existing friends list

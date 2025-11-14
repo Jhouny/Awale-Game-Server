@@ -149,7 +149,10 @@ int main(int argc, char* argv[]) {
             bio[strcspn(bio, "\n")] = '\0';
 
             if (strcmp(bio, "back") == 0) {
+                pthread_mutex_lock(&client_data.data_mutex);
                 client_data.current_state = STATE_HOME;
+                pthread_mutex_unlock(&client_data.data_mutex);
+                needs_redraw = 1;
                 continue;
             }
 
@@ -757,27 +760,23 @@ int main(int argc, char* argv[]) {
                 if (res == 0) {
                     Response* response = receive_and_deserialize_Response(socket_fd);
                     if (response != NULL) {
-                        if (response->status_code == 1 && response->body_size >= 3 && response->body_size % 3 == 0) {
+                        if (response->status_code == 1 && response->body_size > 0)  {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "Retrieved games:\n");
 
                             client_data.game_count = 0;
 
                             for (int i = 0; i < response->body_size; i += 3) {
-                                char* id_str = response->body[i];
-                                char* player1 = response->body[i + 1];
-                                char* player2 = response->body[i + 2];
+                                char *game_info = response->body[i];
+                                char *id_str, *player1, *player2;
+                                id_str = strtok(game_info, ",");
+                                player1 = strtok(NULL, ",");
+                                player2 = strtok(NULL, ",");
 
                                 if (id_str && player1 && player2) {
                                     client_data.game_ids[client_data.game_count++] = atoi(id_str);
 
-                                    char line[256];
-                                    snprintf(line, sizeof(line),
-                                            "  - Game %s: %s vs %s\n",
-                                            id_str, player1, player2);
-
-                                    strncat(client_data.status_message, line,
-                                            sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
+                                    printf("  - Game %s: %s vs %s\n", id_str, player1, player2);
                                 }
                             
                             }
@@ -797,74 +796,135 @@ int main(int argc, char* argv[]) {
                             "Failed to send retrieve games command.");
                 }
 
-                client_data.current_state = STATE_HOME;
+                // Get user input for game ID to spectate or 'back'
                 pthread_mutex_unlock(&client_data.data_mutex);
-                needs_redraw = 1;
-            }
-        else if (current_state == STATE_SPECTATING) {
-            fflush(stdout);
+                printf("Enter the Game ID to spectate or 'back' to return: ");
+                fflush(stdout);
+                char input[256];
+                if (!fgets(input, sizeof(input), stdin)) continue;
+                input[strcspn(input, "\n")] = '\0';
 
-            printf("%s", client_data.status_message);
-            printf("\nEnter the Game ID to spectate: ");
-            fflush(stdout);
-
-            int chosen_id = -1;
-            scanf("%d", &chosen_id);
-
-            // Vérifie si le Game ID est valide
-            int valid = 0;
-            for (int i = 0; i < client_data.game_count; i++) {
-                if (client_data.game_ids[i] == chosen_id) {
-                    valid = 1;
-                    break;
+                if (strcmp(input, "back") == 0) {
+                    pthread_mutex_lock(&client_data.data_mutex);
+                    client_data.current_state = STATE_HOME;
+                    pthread_mutex_unlock(&client_data.data_mutex);
+                    needs_redraw = 1;
                 }
-            }
 
-            if (!valid) {
-                snprintf(client_data.status_message, sizeof(client_data.status_message),
-                        "Invalid Game ID selected.");
-                client_data.current_state = STATE_HOME;
-            } else {
-                // Envoie la commande SPECTATE
-                char *args[1];
-                char id_str[16];
-                snprintf(id_str, sizeof(id_str), "%d", chosen_id);
-                args[0] = id_str;
+                // Send command to spectate chosen game
+                int chosen_id = atoi(input);
+                // Vérifie si le Game ID est valide
+                int valid = 0;
+                for (int i = 0; i < client_data.game_count; i++) {
+                    if (client_data.game_ids[i] == chosen_id) {
+                        valid = 1;
+                        break;
+                    }
+                }
 
-                Command* spectate_cmd = createCommand("SPECTATE", args, 1);
-                int res = serialize_and_send_Command(socket_fd, spectate_cmd);
+                if (!valid) {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Invalid Game ID selected.");
+                    client_data.current_state = STATE_HOME;
+                } else {
 
-                if (res == 0) {
+                    // Send SPECTATE command
+                    char game_id_str[16];
+                    snprintf(game_id_str, sizeof(game_id_str), "%d", chosen_id);
+                    char *args[1] = { game_id_str };
+                    Command* spectate_cmd = createCommand("SPECTATE", args, 1);
+                    int res = serialize_and_send_Command(socket_fd, spectate_cmd);
+                    if (res != 0) {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Failed to send SPECTATE command.");
+                        client_data.current_state = STATE_HOME;
+                        needs_redraw = 1;
+                        continue;
+                    }
                     Response* response = receive_and_deserialize_Response(socket_fd);
                     if (response != NULL) {
                         if (response->status_code == 1) {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                    "Now spectating game %d...", chosen_id);
-                            display_response_message(&client_data, response);
+                                    "Now spectating game ID %d.", chosen_id);
                             client_data.current_state = STATE_SPECTATING;
                         } else {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                    "Failed to spectate game %d.", chosen_id);
+                                    "Failed to spectate game ID %d.", chosen_id);
                             client_data.current_state = STATE_HOME;
+                            needs_redraw = 1;
+                            for (int i = 0; i < response->body_size; i++)
+                                free(response->body[i]);
+                            free(response);
+                            continue;
                         }
-
                         for (int i = 0; i < response->body_size; i++)
                             free(response->body[i]);
                         free(response);
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
-                                "No response from server for spectate request.");
+                                "No response from server.");
                         client_data.current_state = STATE_HOME;
+                        needs_redraw = 1;
+                        continue;
                     }
-                } else {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Failed to send spectate command.");
-                    client_data.current_state = STATE_HOME;
                 }
             }
+        else if (current_state == STATE_SPECTATING) {
+            fflush(stdout);
 
             pthread_mutex_lock(&client_data.data_mutex);
+
+            // Envoie une commande UPDATE_SPECTATE pour obtenir les dernières données
+            Command* update_cmd = createCommand("UPDATE_SPECTATE", NULL, 0);
+            int res = serialize_and_send_Command(socket_fd, update_cmd);
+
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+                if (response != NULL) {
+                    if (response->status_code == 1 && response->body_size > 0) {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Spectating update:\n%s", response->body[0]);
+                        display_response_message(&client_data, response);
+                        // Print game board
+                        Awale_Network net_game;
+                        memcpy(&net_game, response->body[0], sizeof(Awale_Network));
+                        Awale game;
+                        deserializeAwale(&net_game, &game);
+                        printf("\n--- Current Board ---\n");
+                        printBoard(&game);
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Failed to retrieve spectate update.");
+                    }
+
+                    for (int i = 0; i < response->body_size; i++)
+                        free(response->body[i]);
+                    free(response);
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "No response from server.");
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send update spectate command.");
+            }
+            
             pthread_mutex_unlock(&client_data.data_mutex);
+            sleep(2);  // Pause before next update/
+
+            // Check for user input to exit spectating
+            char input[256];
+            if (!fgets(input, sizeof(input), stdin)) continue;
+            input[strcspn(input, "\n")] = '\0';
+
+            if (strcmp(input, "back") == 0) {
+                pthread_mutex_lock(&client_data.data_mutex);
+                client_data.current_state = STATE_HOME;
+                pthread_mutex_unlock(&client_data.data_mutex);
+                needs_redraw = 1;
+                continue;
+            }
+
             needs_redraw = 1;
         }
 
@@ -1279,27 +1339,17 @@ int main(int argc, char* argv[]) {
                 if (response && response->status_code == 1 && response->body_size > 0) {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Your friends:\n");
-                    printf("Your friends:\n");
+                    printf("\nYour friends:\n");
 
                     client_data.friends_count = 0;
 
                     for (int i = 0; i < response->body_size; i++) {
-                        snprintf(client_data.friends_usernames[i],
-                                sizeof(client_data.friends_usernames[i]), "%s", response->body[i]);
-
                         printf("  %d - %s\n", i + 1, response->body[i]);
-                        char line[256];
-                        snprintf(line, sizeof(line), "  %d - %s\n", i + 1, response->body[i]);
-                        strncat(client_data.status_message, line,
-                                sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
-
                         client_data.friends_count++;
                     }
 
-                    display_response_message(&client_data, response);
                 } else {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "You have no friends.\nType 'add <username>' to add one.");
+                    printf("You have no friends.\nType 'add <username>' to add one.\n");
                     client_data.friends_count = 0;
                 }
 
@@ -1317,6 +1367,13 @@ int main(int argc, char* argv[]) {
             if (fgets(input, sizeof(input), stdin) == NULL) continue;
             input[strcspn(input, "\n")] = '\0';
 
+            if (strcmp(input, "back") == 0) {
+                client_data.current_state = STATE_HOME;
+                pthread_mutex_unlock(&client_data.data_mutex);
+                needs_redraw = 1;
+                continue;
+            }
+
             if (strncmp(input, "add ", 4) == 0) {
                 char* username_to_add = input + 4;
 
@@ -1331,9 +1388,11 @@ int main(int argc, char* argv[]) {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
                                 "Friend '%s' added successfully.", username_to_add);
                         display_response_message(&client_data, response);
+                        printf("Friend '%s' added successfully.\n", username_to_add);
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
                                 "Failed to add friend '%s'.", username_to_add);
+                        printf("Failed to add friend '%s'.\n", username_to_add);
                     }
 
                     if (response) {
@@ -1343,6 +1402,7 @@ int main(int argc, char* argv[]) {
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Failed to send ADD_FRIEND command.");
+                    printf("Failed to send ADD_FRIEND command.\n");
                 }
             } else if (strncmp(input, "remove ", 7) == 0) {
                 char* username_to_remove = input + 7;
@@ -1358,9 +1418,11 @@ int main(int argc, char* argv[]) {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
                                 "Friend '%s' removed successfully.", username_to_remove);
                         display_response_message(&client_data, response);
+                        printf("Friend '%s' removed successfully.\n", username_to_remove);
                     } else {
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
                                 "Failed to remove friend '%s'.", username_to_remove);
+                        printf("Failed to remove friend '%s'.\n", username_to_remove);
                     }
 
                     if (response) {
@@ -1370,92 +1432,13 @@ int main(int argc, char* argv[]) {
                 } else {
                     snprintf(client_data.status_message, sizeof(client_data.status_message),
                             "Failed to send REMOVE_FRIEND command.");
+                    printf("Failed to send REMOVE_FRIEND command.\n");
                 }
             }            
-
+            
             pthread_mutex_unlock(&client_data.data_mutex);
             needs_redraw = 1;
-        }
-
-        /*else if (current_state == STATE_ADD_FRIEND) {
-            fflush(stdout);
-            printf("Enter the username to add as friend: ");
-            char username[251];
-            if (fgets(username, sizeof(username), stdin) == NULL) continue;
-            username[strcspn(username, "\n")] = '\0';
-
-            char* args[1] = { username };
-            Command* cmd = createCommand("ADD_FRIEND", args, 1);
-            int res = serialize_and_send_Command(socket_fd, cmd);
-
-            pthread_mutex_lock(&client_data.data_mutex);
-
-            if (res == 0) {
-                Response* response = receive_and_deserialize_Response(socket_fd);
-
-                if (response && response->status_code == 1) {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Friend '%s' added successfully.", username);
-                    display_response_message(&client_data, response);
-                } else {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Failed to add friend '%s'.", username);
-                }
-
-                if (response) {
-                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
-                    free(response);
-                }
-            } else {
-                snprintf(client_data.status_message, sizeof(client_data.status_message),
-                        "Failed to send ADD_FRIEND command.");
-            }
-
-            client_data.current_state = STATE_RETRIEVE_FRIENDS;
-            pthread_mutex_unlock(&client_data.data_mutex);
-            needs_redraw = 1;
-        }
-
-        else if (current_state == STATE_REMOVE_FRIEND) {
-            fflush(stdout);
-            printf("Enter the username to remove from friends: ");
-            char username[251];
-            if (fgets(username, sizeof(username), stdin) == NULL) continue;
-            username[strcspn(username, "\n")] = '\0';
-
-            char* args[1] = { username };
-            Command* cmd = createCommand("REMOVE_FRIEND", args, 1);
-            int res = serialize_and_send_Command(socket_fd, cmd);
-
-            pthread_mutex_lock(&client_data.data_mutex);
-
-            if (res == 0) {
-                Response* response = receive_and_deserialize_Response(socket_fd);
-
-                if (response && response->status_code == 1) {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Friend '%s' removed successfully.", username);
-                    display_response_message(&client_data, response);
-                } else {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Failed to remove friend '%s'.", username);
-                }
-
-                if (response) {
-                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
-                    free(response);
-                }
-            } else {
-                snprintf(client_data.status_message, sizeof(client_data.status_message),
-                        "Failed to send REMOVE_FRIEND command.");
-            }
-
-            client_data.current_state = STATE_RETRIEVE_FRIENDS;
-            pthread_mutex_unlock(&client_data.data_mutex);
-            needs_redraw = 1;
-        }*/
-
-        else {
+        } else {
             // Canonical mode for text input
             printf("Enter command: ");
             fflush(stdout);
