@@ -34,7 +34,7 @@ void copyAwale(const Awale* src, Awale* dest) {
 void printBoard(Awale* game) {
     // Implementation of board printing goes here
     for (int i = 0; i < 2; ++i) {
-        printf("Player %d: ", game->playernames[i]);
+        printf("Player %d: ", i);
         for (int j = 0; j < 6; ++j) {
             printf("%d ", game->board[i][j]);
         }
