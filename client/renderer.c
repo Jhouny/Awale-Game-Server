@@ -102,8 +102,8 @@ char* render_client_state_text(const ClientData* data) {
             strcat(buffer, "RETRIEVE BIO\n\nEnter username or 'back' to return to home.\n");
             break;
 
-        case STATE_RETRIEVE_CHATS:
-            strcat(buffer, "CHOOSE CHAT\n\nEnter username to chat or 'back' to return to home.\n");
+        case STATE_CHOOSE_CHAT:
+            strcat(buffer, "CHOOSE CHAT\n\nSelect a chat from the list, create a chat by typing 'new chat' or type 'back' to return to home.\n");
             break;
 
         case STATE_CHATTING:

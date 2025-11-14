@@ -1087,62 +1087,6 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-        else if (current_state == STATE_RETRIEVE_CHATS) {
-            fflush(stdout);
-
-            Command* cmd = createCommand("RETRIEVE_CHATS", NULL, 0);
-            int res = serialize_and_send_Command(socket_fd, cmd);
-
-            pthread_mutex_lock(&client_data.data_mutex);
-
-            if (res == 0) {
-                Response* response = receive_and_deserialize_Response(socket_fd);
-
-                if (response && response->status_code == 1 && response->body_size > 0) {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "You have conversations with:\n");
-
-                    client_data.chat_count = 0;
-
-                    for (int i = 0; i < response->body_size; i++) {
-                        snprintf(client_data.chat_usernames[i],
-                                sizeof(client_data.chat_usernames[i]), "%s", response->body[i]);
-
-                        char line[256];
-                        snprintf(line, sizeof(line), "  %d - %s\n", i + 1, response->body[i]);
-                        strncat(client_data.status_message, line,
-                                sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
-
-                        client_data.chat_count++;
-                    }
-
-                    // Ajoute l'option pour créer un nouveau chat
-                    strncat(client_data.status_message,
-                    "\nType 'new chat' to start a new conversation.\n",
-                    sizeof(client_data.status_message) - strlen(client_data.status_message) - 1);
-                    display_response_message(&client_data, response);
-                    client_data.current_state = STATE_CHOOSE_CHAT;
-                } else {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "No previous conversations found.");
-                    client_data.current_state = STATE_HOME;
-                }
-
-                if (response) {
-                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
-                    free(response);
-                }
-            } else {
-                snprintf(client_data.status_message, sizeof(client_data.status_message),
-                        "Failed to send retrieve chats command.");
-                client_data.current_state = STATE_HOME;
-            }
-
-            pthread_mutex_unlock(&client_data.data_mutex);
-            needs_redraw = 1;
-        }
-
-
         else if (current_state == STATE_CHOOSE_CHAT) {
             fflush(stdout);
 
@@ -1150,12 +1094,62 @@ int main(int argc, char* argv[]) {
             if (fgets(input, sizeof(input), stdin) == NULL) continue;
             input[strcspn(input, "\n")] = '\0'; // Enlève le \n
 
-            // ✅ Nouveau chat demandé
             if (strcmp(input, "new chat") == 0) {
-                client_data.current_state = STATE_CREATE_CHAT;
+                // Demander le nom du nouveau chatteur
+                printf("Enter username to start a new chat with: ");
+                fflush(stdout);
+                if (fgets(input, sizeof(input), stdin) == NULL) {
+                    // Retourner au choix chat si erreur
+                    client_data.current_state = STATE_CHOOSE_CHAT;
+                    needs_redraw = 1;
+                    continue;
+                }
+                input[strcspn(input, "\n")] = '\0';
+
+                char* args[1] = { input };
+                Command* cmd = createCommand("CREATE_CHAT", args, 1);
+                int res = serialize_and_send_Command(socket_fd, cmd);
+
+                pthread_mutex_lock(&client_data.data_mutex);
+
+                if (res == 0) {
+                    Response* response = receive_and_deserialize_Response(socket_fd);
+                    if (response && response->status_code == 1 && response->body_size > 0) {
+                        // Ajoute à la liste locale
+                        if (client_data.chat_count < 1000) {
+                            snprintf(client_data.chat_usernames[client_data.chat_count],
+                                    sizeof(client_data.chat_usernames[client_data.chat_count]), "%s", input);
+                            client_data.chat_count++;
+                        }
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Chat created successfully with %s.", input);
+                    } else {
+                        snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                "Failed to create chat with %s.", input);
+                    }
+
+                    if (response) {
+                        for (int i = 0; i < response->body_size; i++) free(response->body[i]);
+                        free(response);
+                    }
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "Failed to send CREATE_CHAT command.");
+                }
+
+                pthread_mutex_unlock(&client_data.data_mutex);
+
+                client_data.current_state = STATE_CHOOSE_CHAT;
                 needs_redraw = 1;
                 continue;
             }
+
+            if (strcmp(input, "back") == 0) {
+                client_data.current_state = STATE_HOME;
+                needs_redraw = 1;
+                continue;
+            }
+
             int choice = atoi(input);
             if (choice <= 0 || choice > client_data.chat_count) {
                 snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -1170,7 +1164,6 @@ int main(int argc, char* argv[]) {
                     "%s", client_data.chat_usernames[client_data.selected_chat_index]);
             pthread_mutex_unlock(&client_data.data_mutex);
 
-            // Passe à l’état d’ouverture du chat
             client_data.current_state = STATE_CHATTING;
             needs_redraw = 1;
         }
