@@ -49,6 +49,7 @@ typedef struct {
     char chat_usernames[1000][251];
     int chat_count;
     int selected_chat_index;
+    char current_chat[251];
     char selected_chat_user[251];
     char pending_message[251];
 

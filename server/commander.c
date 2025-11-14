@@ -315,6 +315,7 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
         if (game == NULL) {
             printf("No active game found for user associated with fd %d.\n", client_socket_fd);
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "No active game found for user.");
+            res->status_code = 1;
             return res;
         }
 
@@ -592,6 +593,12 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
                 sscanf(chat_key, "%[^_]_%s", other_username, other_username + strlen(other_username) + 1);
                 if (strcmp(other_username, username) == 0) // Avoid adding self
                     strcpy(other_username, chat_key + strlen(username) + 1); // Skip underscore
+                res->body[res->body_size] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+                if (res->body[res->body_size] == NULL) {
+                    printf("Error allocating memory for chat username in response body.\n");
+                    res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for chat username.");
+                    return res;
+                }
                 strcpy(res->body[res->body_size++], other_username);
             }
         }
@@ -606,6 +613,7 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Invalid number of arguments for %s.", cmd->command);
             return res;
         }
+        printf("Opening chat with key: %s\n", cmd->args[0]);
         // Retrieve chat history with specified user
         const char* chat_key = cmd->args[0];
         table* chats_table = get_table(cmdGlobals.db, "chats", 0);
@@ -715,6 +723,14 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't create new chat in database.");
             return res;
         }
+        res->body[0] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+        if (res->body[0] == NULL) {
+            printf("Error allocating memory for chat key in response body.\n");
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for chat key.");
+            return res;
+        }
+        strcpy(res->body[0], chat_key);
+        res->body_size = 1;
         res->status_code = 1; // Success
         return res;
     } else if (strcmp(cmd->command, "RETRIEVE_FRIENDS") == 0) {

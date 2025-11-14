@@ -71,6 +71,7 @@ int main(int argc, char* argv[]) {
         .challenges_updated = 0,
         .game_count = 0,
         .game_ids = {0},
+        .current_chat = "",
     };
     pthread_mutex_init(&client_data.data_mutex, NULL);
 
@@ -608,7 +609,7 @@ int main(int argc, char* argv[]) {
                 while (!game_over) {
 
                     // Boucle d’attente : tant que c’est pas ton tour
-                    while (1) {
+                    while (!game_over) {
                         Command* update_cmd = createCommand("UPDATE_GAME", NULL, 0);
                         int update_res = serialize_and_send_Command(socket_fd, update_cmd);
 
@@ -655,6 +656,7 @@ int main(int argc, char* argv[]) {
                                 break;
                             }
                         }
+                        
 
                         for (int i = 0; i < update_response->body_size; i++)
                             free(update_response->body[i]);
@@ -899,6 +901,9 @@ int main(int argc, char* argv[]) {
                             client_data.current_state = STATE_HOME;
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "Game over! Returning to home.");
+                            current_state = STATE_HOME;
+                            needs_redraw = 1;
+                            continue;
                         }
 
                         printf("\n--- Current Board ---\n");
@@ -1084,6 +1089,49 @@ int main(int argc, char* argv[]) {
         else if (current_state == STATE_CHOOSE_CHAT) {
             fflush(stdout);
 
+            // Retrieve chat list from server
+            Command* cmd = createCommand("RETRIEVE_CHATS", NULL, 0);
+            int res = serialize_and_send_Command(socket_fd, cmd);
+            pthread_mutex_lock(&client_data.data_mutex);
+            if (res == 0) {
+                Response* response = receive_and_deserialize_Response(socket_fd);
+                if (response != NULL) {
+                    if (response->status_code == 1 && response->body_size > 0) {
+                        printf("Your chats:\n");
+
+                        client_data.chat_count = 0;
+
+                        // Empty existing list
+                        memset(client_data.chat_usernames, 0, sizeof(client_data.chat_usernames));
+                        for (int i = 0; i < response->body_size; i++) {
+                            char* chat_username = response->body[i];
+
+                            // Stocke localement
+                            snprintf(client_data.chat_usernames[client_data.chat_count],
+                                    sizeof(client_data.chat_usernames[client_data.chat_count]), "%s", chat_username);
+                            if (client_data.chat_count < 1000) {
+                                printf("  %d - %s\n", client_data.chat_count + 1, chat_username);
+                                client_data.chat_count++;
+                            }
+                        }
+                    } else {
+                        printf("No chats found.\n");
+                    }
+
+                    for (int i = 0; i < response->body_size; i++)
+                        free(response->body[i]);
+                    free(response);
+                } else {
+                    snprintf(client_data.status_message, sizeof(client_data.status_message),
+                            "No response from server.");
+                }
+            } else {
+                snprintf(client_data.status_message, sizeof(client_data.status_message),
+                        "Failed to send retrieve chats command.");
+            }
+
+            pthread_mutex_unlock(&client_data.data_mutex);
+
             char input[251];
             if (fgets(input, sizeof(input), stdin) == NULL) continue;
             input[strcspn(input, "\n")] = '\0'; // Enlève le \n
@@ -1112,7 +1160,7 @@ int main(int argc, char* argv[]) {
                         // Ajoute à la liste locale
                         if (client_data.chat_count < 1000) {
                             snprintf(client_data.chat_usernames[client_data.chat_count],
-                                    sizeof(client_data.chat_usernames[client_data.chat_count]), "%s", input);
+                                    sizeof(client_data.chat_usernames[client_data.chat_count]), "%s", response->body[0]);
                             client_data.chat_count++;
                         }
                         snprintf(client_data.status_message, sizeof(client_data.status_message),
@@ -1157,7 +1205,10 @@ int main(int argc, char* argv[]) {
             snprintf(client_data.selected_chat_user, sizeof(client_data.selected_chat_user),
                     "%s", client_data.chat_usernames[client_data.selected_chat_index]);
             pthread_mutex_unlock(&client_data.data_mutex);
-
+            char *chat_key = client_data.username;
+            strcat(chat_key, "_");
+            strcat(chat_key, client_data.selected_chat_user);
+            strncpy(client_data.current_chat, chat_key, sizeof(client_data.current_chat));
             client_data.current_state = STATE_CHATTING;
             needs_redraw = 1;
         }
@@ -1166,9 +1217,9 @@ int main(int argc, char* argv[]) {
             fflush(stdout);
 
             // Ouvre le chat : demande l’historique
-            char* args[1] = { client_data.selected_chat_user };
-            Command* cmd = createCommand("OPEN_CHAT", args, 1);
-            int res = serialize_and_send_Command(socket_fd, cmd);
+            char* args2[1] = { client_data.current_chat };  // Utilise
+            Command* cmd2 = createCommand("OPEN_CHAT", args2, 1);
+            int res = serialize_and_send_Command(socket_fd, cmd2);
 
             pthread_mutex_lock(&client_data.data_mutex);
 
@@ -1219,14 +1270,23 @@ int main(int argc, char* argv[]) {
 
             if (strlen(message) == 0) continue;
             fflush(stdout);
+            
+            if (strcmp(message, "back") == 0) {
+                    client_data.current_state = STATE_HOME;
+                    client_data.selected_menu_option = 0;
+                    needs_redraw = 1;
+                    continue;
+                }
 
-            char* args[2] = { client_data.selected_chat_user, client_data.message };
+            char* args[2] = { client_data.username, message };
+            strcat(args[0], "_");
+            strcat(args[0], client_data.selected_chat_user);
             Command* cmd = createCommand("SEND_MSG", args, 2);
-            int res = serialize_and_send_Command(socket_fd, cmd);
+            int res2 = serialize_and_send_Command(socket_fd, cmd);
 
             pthread_mutex_lock(&client_data.data_mutex);
 
-            if (res == 0) {
+            if (res2 == 0) {
                 Response* response = receive_and_deserialize_Response(socket_fd);
                 if (response && response->status_code == 1) {
                     char line[512];
@@ -1256,9 +1316,7 @@ int main(int argc, char* argv[]) {
 
             pthread_mutex_lock(&client_data.data_mutex);
             strncpy(client_data.pending_message, message, sizeof(client_data.pending_message) - 1);
-            client_data.current_state = STATE_SEND_MSG;
             pthread_mutex_unlock(&client_data.data_mutex);
-            needs_redraw = 1;
         }
 
         else if (current_state == STATE_FRIENDS) {
