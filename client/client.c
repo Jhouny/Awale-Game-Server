@@ -660,7 +660,11 @@ int main(int argc, char* argv[]) {
                             free(update_response->body[i]);
                         free(update_response);
                         
-                        printf("Waiting for opponent...\n");
+                        static int waiting_printed = 0;
+                        if (!waiting_printed) {
+                            printf("Waiting for opponent...\n");
+                            waiting_printed = 1;
+                        }
                         sleep(1);
                     }
 

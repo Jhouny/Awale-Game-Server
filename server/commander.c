@@ -259,6 +259,19 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             memcpy(res->body[0], &net_game, sizeof(Awale_Network));
             res->body_size = 1;
             res->status_code = 1; // Success
+            // Remove the game from running games
+            for (size_t i = 0; i < cmdGlobals.running_games_count; i++) {
+                if (cmdGlobals.running_games[i]->game_id == game->game_id) {
+                    free(cmdGlobals.running_games[i]);
+                    // Shift remaining games
+                    for (size_t j = i; j < cmdGlobals.running_games_count - 1; j++) {
+                        cmdGlobals.running_games[j] = cmdGlobals.running_games[j + 1];
+                    }
+                    cmdGlobals.running_games_count--;
+                    cmdGlobals.running_games = (Awale**) realloc(cmdGlobals.running_games, sizeof(Awale*) * cmdGlobals.running_games_count);
+                    break;
+                }
+            }
             return res;
         }
 
