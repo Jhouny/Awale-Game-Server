@@ -851,6 +851,7 @@ int main(int argc, char* argv[]) {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "Now spectating game ID %d.", chosen_id);
                             client_data.current_state = STATE_SPECTATING;
+                            needs_redraw = 1;
                         } else {
                             snprintf(client_data.status_message, sizeof(client_data.status_message),
                                     "Failed to spectate game ID %d.", chosen_id);
@@ -894,6 +895,12 @@ int main(int argc, char* argv[]) {
                         memcpy(&net_game, response->body[0], sizeof(Awale_Network));
                         Awale game;
                         deserializeAwale(&net_game, &game);
+                        if (net_game.gameOver) {
+                            client_data.current_state = STATE_HOME;
+                            snprintf(client_data.status_message, sizeof(client_data.status_message),
+                                    "Game over! Returning to home.");
+                        }
+
                         printf("\n--- Current Board ---\n");
                         printBoard(&game);
                     } else {
@@ -914,20 +921,7 @@ int main(int argc, char* argv[]) {
             }
             
             pthread_mutex_unlock(&client_data.data_mutex);
-            sleep(2);  // Pause before next update/
-
-            // Check for user input to exit spectating
-            char input[256];
-            if (!fgets(input, sizeof(input), stdin)) continue;
-            input[strcspn(input, "\n")] = '\0';
-
-            if (strcmp(input, "back") == 0) {
-                pthread_mutex_lock(&client_data.data_mutex);
-                client_data.current_state = STATE_HOME;
-                pthread_mutex_unlock(&client_data.data_mutex);
-                needs_redraw = 1;
-                continue;
-            }
+            sleep(1);  // Pause before next update/
 
             needs_redraw = 1;
         }
@@ -1224,18 +1218,9 @@ int main(int argc, char* argv[]) {
             message[strcspn(message, "\n")] = '\0';
 
             if (strlen(message) == 0) continue;
-
-            pthread_mutex_lock(&client_data.data_mutex);
-            strncpy(client_data.pending_message, message, sizeof(client_data.pending_message) - 1);
-            client_data.current_state = STATE_SEND_MSG;
-            pthread_mutex_unlock(&client_data.data_mutex);
-            needs_redraw = 1;
-        }
-
-        else if (current_state == STATE_SEND_MSG) {
             fflush(stdout);
 
-            char* args[2] = { client_data.selected_chat_user, client_data.pending_message };
+            char* args[2] = { client_data.selected_chat_user, client_data.message };
             Command* cmd = createCommand("SEND_MSG", args, 2);
             int res = serialize_and_send_Command(socket_fd, cmd);
 
@@ -1268,55 +1253,10 @@ int main(int argc, char* argv[]) {
             client_data.current_state = STATE_CHATTING;
             pthread_mutex_unlock(&client_data.data_mutex);
             needs_redraw = 1;
-        }
-
-        else if (current_state == STATE_CREATE_CHAT) {
-            fflush(stdout);
-
-            printf("Enter the username of the person you want to chat with: ");
-            char target_user[251];
-            if (fgets(target_user, sizeof(target_user), stdin) == NULL) continue;
-            target_user[strcspn(target_user, "\n")] = '\0';
-
-            // Envoie la commande CREATE_CHAT
-            char* args[1] = { target_user };
-            Command* cmd = createCommand("CREATE_CHAT", args, 1);
-            int res = serialize_and_send_Command(socket_fd, cmd);
 
             pthread_mutex_lock(&client_data.data_mutex);
-
-            if (res == 0) {
-                Response* response = receive_and_deserialize_Response(socket_fd);
-
-                if (response && response->status_code == 1 && response->body_size > 0) {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Chat created successfully with %s (ID: %s)\n",
-                            target_user, response->body[0]);
-
-                    // Ajoute à la liste locale des chats existants
-                    snprintf(client_data.chat_usernames[client_data.chat_count],
-                            sizeof(client_data.chat_usernames[client_data.chat_count]), "%s", target_user);
-                    client_data.chat_count++;
-
-                    // Retourne à l’écran de sélection de chat
-                    client_data.current_state = STATE_CHOOSE_CHAT;
-                    display_response_message(&client_data, response);
-                } else {
-                    snprintf(client_data.status_message, sizeof(client_data.status_message),
-                            "Failed to create chat with %s.", target_user);
-                    client_data.current_state = STATE_CHOOSE_CHAT;
-                }
-
-                if (response) {
-                    for (int i = 0; i < response->body_size; i++) free(response->body[i]);
-                    free(response);
-                }
-            } else {
-                snprintf(client_data.status_message, sizeof(client_data.status_message),
-                        "Failed to send CREATE_CHAT command.");
-                client_data.current_state = STATE_CHOOSE_CHAT;
-            }
-
+            strncpy(client_data.pending_message, message, sizeof(client_data.pending_message) - 1);
+            client_data.current_state = STATE_SEND_MSG;
             pthread_mutex_unlock(&client_data.data_mutex);
             needs_redraw = 1;
         }
