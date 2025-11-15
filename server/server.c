@@ -7,28 +7,6 @@ int main(int argc, char* argv[]) {
 	if (!parse_args(argc, argv))
 		return 1;
 
-	if (pthread_mutex_init(&mut_database, NULL) != 0) {
-		printf("Error initializing database mutex.\n");
-		return 1;
-	}
-	database* db = load_database(globals.db_file);
-
-	if (!validate_database(db)) {
-		printf("Database at %s is invalid or corrupted. Creating a new one...\n", globals.db_file);
-		if (db != NULL)
-			delete_database(db);
-		db = NULL;
-	}
-
-	if (db == NULL) {
-		printf("Couldn't open database at %s, creating an empty one...\n", globals.db_file);
-		db = create_database();
-		apply_database_schema(db);
-	} else {
-		printf("Loaded database from %s.\n\tBacking it up to %s.\n", globals.db_file, DATABASE_BACKUP_FILE);
-		save_database(db, DATABASE_BACKUP_FILE);
-	}
-
 	// Add database to commander globals
 	cmdGlobals.db = db;
 	// Start challenges container
@@ -157,8 +135,10 @@ int main(int argc, char* argv[]) {
 
 
 int parse_args(int argc, char* argv[]) {
-	strncpy(globals.db_file, DATABASE_FILE, 4096);
-	globals.db_file[4096] = '\0';
+	strncpy(globals.db_addr, DEFAULT_DB_ADDR, 256);
+	globals.db_addr[255] = '\0';
+	strncpy(globals.db_port, DEFAULT_DB_PORT, 5);
+	globals.db_port[5] = '\0';
 	strncpy(globals.port, DEFAULT_PORT, 5);
 	globals.port[5] = '\0';
 
@@ -173,9 +153,18 @@ int parse_args(int argc, char* argv[]) {
 		if (strcmp(arg, "port") == 0) {
 			strncpy(globals.port, argv[i+1], 5);
 			globals.port[5] = '\0';
-		} else if (strcmp(arg, "db") == 0 || strcmp(arg, "database") == 0) {
-			strncpy(globals.db_file, argv[i+1], 4096);
-			globals.db_file[4096] = '\0';
+		} else if (strcmp(arg, "db_addr") == 0) {
+			strncpy(globals.db_addr, argv[i+1], 256);
+			globals.db_addr[255] = '\0';
+		} else if (strcmp(arg, "db_port") == 0) {
+			strncpy(globals.db_port, argv[i+1], 5);
+			globals.db_port[5] = '\0';
+		} else if (strcmp(arg, "help") == 0 || strcmp(arg, "h") == 0) {
+			printf("Server Usage:\n");
+			printf("\t--port <port>                  Port number for the server to listen on (default: %s)\n", DEFAULT_PORT);
+			printf("\t--db_addr <database_address>   Address of the database server (default: %s)\n", DEFAULT_DB_ADDR);
+			printf("\t--db_port <database_port>      Port of the database server (default: %s)\n", DEFAULT_DB_PORT);
+			return 0;
 		} else {
 			printf("Argument invalid.\n");
 			return 0;

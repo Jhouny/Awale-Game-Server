@@ -6,16 +6,14 @@
 #include "common.h"
 #include <signal.h>
 
-// Define global variables here
-#define DATABASE_FILE 			"database.db"
-#define DATABASE_BACKUP_FILE 	"database.db.bckp"
-#define DATABASE_SAVE_INTERVAL	30  // in seconds
-#define DEFAULT_PORT			"3000"
-
+#define DEFAULT_PORT	"3001"
+#define DEFAULT_DB_PORT	"3000"
+#define DEFAULT_DB_ADDR	"127.0.0.1"
 
 typedef struct Arguments {
 	char port[6];  // Max port number = 65,535
-	char db_file[4097];  // Max file path in Linux
+	char db_addr[256];  // Database address
+	char db_port[6];  // Database port
 } Arguments;
 
 Arguments globals;
