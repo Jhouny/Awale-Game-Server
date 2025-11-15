@@ -1,8 +1,5 @@
-/* Client pour les sockets
- *    socket_client ip_server port
- */
-#ifndef _CLIENT_H_
-#define _CLIENT_H_
+#ifndef _DBMS_H_
+#define _DBMS_H_
 
 #include "common.h"
 #include <sys/types.h>
@@ -13,7 +10,6 @@
 #include <netdb.h>
 #include <sys/time.h>
 #include <pthread.h>
-#include "app_statemachine.h"
 #include "terminal_utils.h"
 
 #endif

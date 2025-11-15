@@ -8,6 +8,7 @@ static const char DB_SCHEMA[][32] = {
 	"friends",
 };
 
+
 database* create_database() {
 	database* d = (database*) malloc(sizeof(database));
 	if (d == NULL)

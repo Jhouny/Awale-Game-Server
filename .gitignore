@@ -62,3 +62,5 @@ bin/*
 
 # Backup files
 *.bckp
+
+.vscode/

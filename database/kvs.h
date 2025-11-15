@@ -32,7 +32,18 @@ int delete_table(table* t, int locked);
 void set_table_name(table* t, const char* name, int locked);
 int insert(table* t, const char* key, const char* value);
 int insert_entry(table* t, const entry* e);
+int update(table* t, const char* key, const char* new_value);
+int update_entry(table* t, const entry* e);
 int remove_entry(table* t, const char* key);
 char* get(const table* t, const char* key);
+
+/**
+ * \brief Retrieves all keys stored in the table.
+ * 
+ * \param t The table to retrieve keys from.
+ * \param count Pointer to an integer where the number of keys will be stored.
+ * \return An array of strings containing all keys in the table. The caller is responsible for freeing the memory.
+ */
+char** get_all_keys(const table* t, int* count); 
 
 #endif
