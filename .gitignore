@@ -54,8 +54,8 @@ dkms.conf
 # debug information files
 *.dwo
 
-build/*
-bin/*
+**/build/*
+**/bin/*
 
 # Database files
 *.db
