@@ -26,5 +26,6 @@ void disable_alternate_buffer();
 #define KEY_ENTER 10
 #define KEY_ESC 27
 #define KEY_NONE 0
+#define KEY_q 1002
 
 #endif

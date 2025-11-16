@@ -4,7 +4,6 @@
  */
 
 #include "common.h"
-#include <signal.h>
 
 #define DEFAULT_PORT	"3001"
 #define DEFAULT_DB_PORT	"3000"

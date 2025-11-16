@@ -14,20 +14,20 @@ int main(int argc, char* argv[]) {
 	}
 	database* db = load_database(globals.db_file);
 
-	if (!validate_database(db)) {
+	if (!validate_database(db, 0)) {
 		printf("Database at %s is invalid or corrupted. Creating a new one...\n", globals.db_file);
 		if (db != NULL)
-			delete_database(db);
+			delete_database(db, 0);
 		db = NULL;
 	}
 
 	if (db == NULL) {
 		printf("Couldn't open database at %s, creating an empty one...\n", globals.db_file);
 		db = create_database();
-		apply_database_schema(db);
+		apply_database_schema(db, DB_SCHEMA, DB_SCHEMA_SIZE, 0);
 	} else {
 		printf("Loaded database from %s.\n\tBacking it up to %s.\n", globals.db_file, DATABASE_BACKUP_FILE);
-		save_database(db, DATABASE_BACKUP_FILE);
+		save_database(db, DATABASE_BACKUP_FILE, 0);
 	}
 
 	// Add database to commander globals
@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
 
 	// Create connected users to file descriptor association table
 	table* user_fds = create_table();
-	set_table_name(user_fds, "user_fds", 1);
+	set_table_name(user_fds, "user_fds");
 	cmdGlobals.user_fds = user_fds;
 	
 	// Start server
@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
 
 	pthread_mutex_destroy(&mut_client_sockets_fd);
 	// Free allocated database from memory
-	delete_database(db);
+	delete_database(db, 0);
 	return 0;
 }
 
@@ -295,7 +295,7 @@ void *database_save_loop(void *param) {
 	while (1) {
 		sleep(DATABASE_SAVE_INTERVAL);
 		printf("Saving database to disk...\n");
-		if (save_database(db, globals.db_file) != 1) {
+		if (save_database(db, globals.db_file, 0) != 1) {
 			printf("Error saving database to disk.\n");
 		} else {
 			printf("Database saved successfully.\n");

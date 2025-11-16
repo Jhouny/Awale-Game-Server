@@ -9,6 +9,7 @@ int main(int argc, char* argv[]) {
 
 	// Add database to commander globals
 	cmdGlobals.db = db;
+	
 	// Start challenges container
 	table* challenges = create_table();
 	set_table_name(challenges, "challenges", 1);  // No need to lock mutex, since there's no concurrency till here
@@ -31,7 +32,7 @@ int main(int argc, char* argv[]) {
 			printf("Error initializing client sockets mutex.\n");
 			return 1;
 		}
-		pthread_t connectThread, dbSaveThread;
+		pthread_t connectThread;
 		int* param = (int *) malloc(sizeof(int));
 		param[0] = socket_fd;
 		
@@ -41,15 +42,6 @@ int main(int argc, char* argv[]) {
 			return 1;
 		}
 		
-		// Prepare parameters for database save thread
-		database** db_param = (database**) malloc(sizeof(database*));
-		db_param[0] = db;
-		// Start thread to periodically save database to disk
-		if (pthread_create(&dbSaveThread, NULL, database_save_loop, db_param) != 0) {
-			printf("Error creating database thread.\n");
-			return 1;
-		}
-	
 		// Listen to received commands from client and respond accordingly
 		while (1) {
 			// Poll for new command from client
@@ -128,8 +120,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	pthread_mutex_destroy(&mut_client_sockets_fd);
-	// Free allocated database from memory
-	delete_database(db);
 	return 0;
 }
 

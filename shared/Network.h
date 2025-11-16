@@ -49,6 +49,17 @@ typedef struct Response {
 } Response;
 
 int serialize_and_send_Response(int socket_fd, Response* res);
-Response* receive_and_deserialize_Response(int socket_fd);
+Response* receive_and_deserialize_Response(int socket_fd, int timeout_ms);
+
+/**
+ * \brief Helper function to send command and receive response in one call.
+ */
+Response* send_command_and_receive_response(int socket_fd, Command* cmd, int timeout_ms);
+
+/**
+ * \brief Function to create a thread for handling timeouts.
+ * \param param Pointer to an integer array where the first element is the timeout in milliseconds and the second element is a pointer to an integer flag to indicate timeout occurrence.
+ */
+void* timeout_handler(void* param);
 
 #endif

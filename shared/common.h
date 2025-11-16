@@ -14,9 +14,8 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include <pthread.h>
+#include <signal.h>
 
 #define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
-
-extern pthread_mutex_t mut_database;
 
 #endif

@@ -77,9 +77,13 @@ int read_key_with_timeout(long timeout_us) {
             if (seq[1] == 'B') return KEY_DOWN;
         }
         return KEY_ESC;
+    } else if (c == 'q') {
+        return KEY_q;
+    } else if (c == '\n') {
+        return KEY_ENTER;
     }
-    
-    return c;
+
+    return KEY_NONE;
 }
 
 void enable_alternate_buffer() {

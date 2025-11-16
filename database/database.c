@@ -1,6 +1,6 @@
 #include "database.h"
 
-static const char DB_SCHEMA[][32] = {
+const char* DB_SCHEMA[] = {
 	"users",
 	"bio",
 	"user-games",
@@ -18,32 +18,41 @@ database* create_database() {
 	return d;
 }
 
-int apply_database_schema(database* d) {
-	pthread_mutex_lock(&mut_database);
+int apply_database_schema(database* d, const char** schema, int schema_size, int locked) {
+	if (!locked)
+		pthread_mutex_lock(&mut_database);
 	if (d == NULL) {
-		pthread_mutex_unlock(&mut_database);
+		if (!locked)
+			pthread_mutex_unlock(&mut_database);
 		return 0;
 	}
 
-	for (int i = 0; i < DB_SCHEMA_SIZE; i++) {
-		if (get_table(d, DB_SCHEMA[i], 1) == NULL) {
-			add_table(d, DB_SCHEMA[i], 1);
+	for (int i = 0; i < schema_size; i++) {
+		if (get_table(d, schema[i], 1) == NULL) {
+			add_table(d, schema[i], 1);
 		}
 	}
-	pthread_mutex_unlock(&mut_database);
+	if (!locked)
+		pthread_mutex_unlock(&mut_database);
 	return 1;
 }
 
-int delete_database(database* d) {
-	pthread_mutex_destroy(&mut_database);
-	if (d == NULL)
+int delete_database(database* d, int locked) {
+	if (!locked)
+		pthread_mutex_lock(&mut_database);
+	if (d == NULL) {
+		if (!locked)
+			pthread_mutex_unlock(&mut_database);
 		return 0;
+	}
 
 	for (int i = 0; i < d->size; i++) {
-		delete_table(d->tables[i], 1);
+		delete_table(d->tables[i]);
 	}
 	free(d->tables);
 	free(d);
+	if (!locked)
+		pthread_mutex_unlock(&mut_database);
 	return 1;
 }
 
@@ -69,7 +78,7 @@ table* add_table(database* d, const char* name, int locked) {
 			pthread_mutex_unlock(&mut_database);
 		return NULL;
 	}
-	set_table_name(d->tables[d->size - 1], name, 1);
+	set_table_name(d->tables[d->size - 1], name);
 	if (!locked)
 		pthread_mutex_unlock(&mut_database);
 	return d->tables[d->size - 1];
@@ -96,27 +105,33 @@ const table* get_table(const database* d, const char* name, int locked) {
 	return NULL;
 }
 
-int validate_database(const database* d) {
-	pthread_mutex_lock(&mut_database);
+int validate_database(const database* d, int locked) {
+	if (!locked)
+		pthread_mutex_lock(&mut_database);
 	if (d == NULL) {
-		pthread_mutex_unlock(&mut_database);
+		if (!locked)
+			pthread_mutex_unlock(&mut_database);
 		return 0;
 	}
 
 	for (int i = 0; i < DB_SCHEMA_SIZE; i++) {
 		if (get_table(d, DB_SCHEMA[i], 1) == NULL) {
-			pthread_mutex_unlock(&mut_database);
+			if (!locked)
+				pthread_mutex_unlock(&mut_database);
 			return 0;
 		}
 	}
-	pthread_mutex_unlock(&mut_database);
+	if (!locked)
+		pthread_mutex_unlock(&mut_database);
 	return 1;
 }
 
-int save_database(const database* d, const char* filename) {
-	pthread_mutex_lock(&mut_database);
+int save_database(const database* d, const char* filename, int locked) {
+	if (!locked)
+		pthread_mutex_lock(&mut_database);
 	if (d == NULL || filename == NULL) {
-		pthread_mutex_unlock(&mut_database);
+		if (!locked)
+			pthread_mutex_unlock(&mut_database);
 		return 0;
 	}
 
@@ -124,9 +139,9 @@ int save_database(const database* d, const char* filename) {
 	if (file == NULL)
 		return 0;
 
-	// Saving goes here
 	// Save database size info
 	fwrite(&d->size, sizeof(int), 1, file);
+
 	// Save tables
 	for (int i = 0; i < d->size; i++) {  // For each table
 		fwrite(&d->tables[i]->size, sizeof(int), 1, file);
@@ -138,7 +153,8 @@ int save_database(const database* d, const char* filename) {
 	}
 
 	fclose(file);
-	pthread_mutex_unlock(&mut_database);
+	if (!locked)
+		pthread_mutex_unlock(&mut_database);
 	return 1;
 }
 

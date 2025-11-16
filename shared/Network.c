@@ -200,7 +200,7 @@ int serialize_and_send_Response(int socket_fd, Response* res) {
 	return 0;
 }
 
-Response* receive_and_deserialize_Response(int socket_fd) {
+Response* receive_and_deserialize_Response(int socket_fd, int timeout_ms) {
 	Response* res = (Response*) malloc(sizeof(Response));
 	if (res == NULL) {
 		printf("Error allocating response.\n");
@@ -209,6 +209,47 @@ Response* receive_and_deserialize_Response(int socket_fd) {
 	memset(res, 0, sizeof(Response));
 
 	size_t total_bytes_received = 0;
+
+	// Create timeout thread if needed
+	int timeout_flag = 0;
+	int *param = (int*) malloc(2 * sizeof(int));
+	pthread_t timeout_thread;
+	if (timeout_ms > 0) {
+		param[0] = timeout_ms;
+		param[1] = (int)(intptr_t)&timeout_flag;
+		if (pthread_create(&timeout_thread, NULL, timeout_handler, param) != 0) {
+			printf("Error creating timeout thread.\n");
+			free(param);
+			free(res);
+			return NULL;
+		}
+		pthread_detach(timeout_thread);  // No need to join later
+	}
+
+	// Loop to receive data with timeout check
+	struct pollfd socket_poll[1];
+	socket_poll[0].fd = socket_fd;
+	socket_poll[0].events = POLLIN;
+	while (!timeout_flag) {
+		int events = poll(socket_poll, 1, 100);  // 100 ms timeout
+		if (events == 0)
+			continue;  // No data yet, check timeout again
+		else if (events == -1) {
+			free(res);
+			free(param);
+			printf("Error polling socket for response.\n");
+			return NULL;
+		}
+		break;  // Data is available
+	}
+	
+	if (timeout_flag) {
+		free(res);
+		free(param);
+		printf("Timeout while waiting for response.\n");
+		return NULL;
+	}
+	free(param);
 
 	// Receive status code
 	if (recv(socket_fd, &res->status_code, sizeof(int), 0) != sizeof(int)) {
@@ -263,21 +304,33 @@ Response* receive_and_deserialize_Response(int socket_fd) {
 	return res;
 }
 
+Response* send_command_and_receive_response(int socket_fd, Command* cmd, int timeout_ms) {
+	// Send command
+	if (serialize_and_send_Command(socket_fd, cmd) != 0) {
+		printf("Error sending command '%s'.\n", cmd->command);
+		return NULL;
+	}
 
+	// Receive response
+	Response* res = receive_and_deserialize_Response(socket_fd, timeout_ms);
+	if (res == NULL) {
+		printf("Error receiving response for command '%s'.\n", cmd->command);
+		return NULL;
+	}
 
+	return res;
+}
 
+void* timeout_handler(void* param) {
+	int timeout_ms = ((int*)param)[0];
+	int* timeout_flag = (int*)param + 1;
 
+	struct timespec ts;
+	ts.tv_sec = timeout_ms / 1000;
+	ts.tv_nsec = (timeout_ms % 1000) * 1000000;
 
+	nanosleep(&ts, NULL);
+	*timeout_flag = 1;
 
-
-
-
-
-
-
-
-
-
-
-
-
+	return NULL;
+}

@@ -41,8 +41,6 @@ int main(int argc, char* argv[]) {
 
     printf("Connected to %s:%s\n", argv[1], argv[2]);
 
-    struct termios orig_termios;
-
     enable_alternate_buffer();
 
     // Main loop or functionality would go here
@@ -82,7 +80,7 @@ int main(int argc, char* argv[]) {
                 Command* command = createCommand(cmd, args, args_size);
                 int res = serialize_and_send_Command(socket_fd, command);
                 if (res == 0) {
-                    Response* response = receive_and_deserialize_Response(socket_fd);
+                    Response* response = receive_and_deserialize_Response(socket_fd, 5000);
                     if (response) {
                         if (response->status_code == 0) {
                             printf("Command failed. Server's response: %s\n", response->message);
