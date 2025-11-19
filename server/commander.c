@@ -30,19 +30,36 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
         printf("Login attempt with username: %s and password: %s\n", username, password);
 
         // Verify user credentials against database
-        table* users_table = get_table(cmdGlobals.db, "users", 0);
-        if (users_table == NULL) {
-            printf("Users table not found in database.\n");
-            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Users table not found.");
+        // Check if username already exists
+        char** args = (char**) malloc(2 * sizeof(char*));
+        args[0] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+        args[1] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+        strncpy(args[0], "users", MAX_ARG_LEN);
+        strncpy(args[1], username, MAX_ARG_LEN);
+        Command* existing_user_cmd = createCommand("GET", args, 2);
+        Response* existing_user_res = send_command_and_receive_response(cmdGlobals.db_socket_fd, existing_user_cmd, 5000);
+        free(args[0]);
+        free(args[1]);
+        free(args);
+        free(existing_user_cmd);
+
+        if (existing_user_res == NULL) {
+            free(existing_user_res);
+            printf("User '%s' not found in database.\n", username);
+            res->message_size = snprintf(res->message, MAX_ARG_LEN, "User not found.");
             return res;
         }
-        char* stored_password = get(users_table, username);
+
+        char* stored_password = existing_user_res->body[0];
         if (stored_password == NULL) {
+            free(existing_user_res);
             printf("Username %s not found.\n", username);
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Username not found.");
             return res;
         }
+
         if (strcmp(stored_password, password) != 0) {
+            free(existing_user_res);
             printf("Incorrect password for username %s.\n", username);
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Password incorrect.");
             return res;
@@ -51,6 +68,8 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
 
 		// Associate file_descriptor with username
 		insert(cmdGlobals.user_fds, fd_string, username);
+
+        free(existing_user_res);
 
         res->status_code = 1; // Success
         return res;
@@ -64,28 +83,53 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
         const char* password = cmd->args[1];
         printf("Signup attempt with username: %s and password: %s\n", username, password);
     
-        // Verify and add user to database
-        table* users_table = get_table(cmdGlobals.db, "users", 0);
-        if (users_table == NULL) {
-            printf("Users table not found in database.\n");
-            res->message_size = snprintf(res->message, MAX_ARG_LEN, "Table 'users' not found in database.");
-            return res;
-        }
-
-        if (get(users_table, username) != NULL) {
+        // Check if username already exists
+        char** args = (char**) malloc(2 * sizeof(char*));
+        args[0] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+        args[1] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+        strncpy(args[0], "users", MAX_ARG_LEN);
+        strncpy(args[1], username, MAX_ARG_LEN);
+        Command* existing_user_cmd = createCommand("GET", args, 2);
+        Response* existing_user_res = send_command_and_receive_response(cmdGlobals.db_socket_fd, existing_user_cmd, 5000);
+        free(args[0]);
+        free(args[1]);
+        free(args);
+        free(existing_user_cmd);
+        
+        if (existing_user_res != NULL && existing_user_res->status_code == 1 && existing_user_res->body_size > 0) {
             printf("Username %s already exists.\n", username);
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Username is already taken.");
             return res;
         }
-        if (!insert(users_table, username, password)) {
+        free(existing_user_res);
+
+        // Insert new user
+        args = (char**) malloc(3 * sizeof(char*));
+        args[0] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+        args[1] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+        args[2] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+        strncpy(args[0], "users", MAX_ARG_LEN);
+        strncpy(args[1], username, MAX_ARG_LEN);
+        strncpy(args[2], password, MAX_ARG_LEN);
+        Command* insert_user_cmd = createCommand("INSERT", args, 3);
+        Response* insert_user_res = send_command_and_receive_response(cmdGlobals.db_socket_fd, insert_user_cmd, 5000);
+        free(args[0]);
+        free(args[1]);
+        free(args[2]);
+        free(args);
+        free(insert_user_cmd);
+
+        if (insert_user_res == NULL || insert_user_res->status_code != 1) {
             printf("Error inserting new user into database.\n");
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't insert new user into database.");
             return res;
         }
+        free(insert_user_res);
+
         printf("User %s successfully signed up.\n", username);
         res->status_code = 1; // Success
         return res;
-    } else if (strcmp(cmd->command, "RETRIEVE_ONLINE_USERS") == 0) {
+    } /*else if (strcmp(cmd->command, "RETRIEVE_ONLINE_USERS") == 0) {
         if (cmd->args_size != 0) {
             printf("Invalid number of arguments for %s command.\n", cmd->command);
             res->message_size = snprintf(res->message, MAX_ARG_LEN, "Invalid number of arguments for %s.", cmd->command);
@@ -796,25 +840,25 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
             while (i < MAX_VALUE_LEN && friends_list[i] != '\0') {
                 char currFriend[MAX_ARG_LEN];
                 int currIndex = 0;
-                /* collect characters until comma or end, guard against overflow */
+                // collect characters until comma or end, guard against overflow
                 while (i < MAX_VALUE_LEN && friends_list[i] != ',' && friends_list[i] != '\0' && currIndex < (MAX_ARG_LEN - 1)) {
                     currFriend[currIndex++] = friends_list[i++];
                 }
                 currFriend[currIndex] = '\0';
-                /* allocate space for the friend string in the response body */
+                // allocate space for the friend string in the response body
                 res->body[res->body_size] = (char*) malloc(MAX_ARG_LEN * sizeof(char));
                 if (res->body[res->body_size] == NULL) {
                     printf("Error allocating memory for friend username in response body.\n");
                     res->message_size = snprintf(res->message, MAX_ARG_LEN, "Couldn't allocate memory for friend username.");
                     return res;
                 }
-                /* ensure null-terminated copy */
+                // ensure null-terminated copy
                 strncpy(res->body[res->body_size], currFriend, MAX_ARG_LEN - 1);
                 res->body[res->body_size][MAX_ARG_LEN - 1] = '\0';
                 res->body_size++;
                 if (friends_list[i] == '\0')
                     break;
-                /* skip the comma delimiter */
+                // skip the comma delimiter
                 if (friends_list[i] == ',')
                     i++;
             }
@@ -931,7 +975,7 @@ Response* execute_command(const Command* cmd, int client_socket_fd) {
         }
         res->status_code = 1; // Success
         return res;
-    } else {
+    }*/ else {
         printf("Unknown command: %s\n", cmd->command);
         res->message_size = snprintf(res->message, MAX_ARG_LEN, "Unknown command: %s", cmd->command);
         return res;

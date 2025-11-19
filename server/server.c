@@ -7,17 +7,56 @@ int main(int argc, char* argv[]) {
 	if (!parse_args(argc, argv))
 		return 1;
 
+	// Connect to database server
+	printf("Connecting to database server at %s:%s...\n", globals.db_addr, globals.db_port);
+	int db_socket_fd;
+    struct addrinfo hints;
+    struct addrinfo *result;
+    struct addrinfo *rp;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;     // IPv4 ou IPv6
+    hints.ai_socktype = SOCK_STREAM; // TCP
+
+    //  Résolution adresse
+    if (getaddrinfo(globals.db_addr, globals.db_port, &hints, &result) != 0)
+    {
+        printf("Error getting address info.\n");
+        return 1;
+    }
+
+    // Tentative de connexion
+    for (rp = result; rp != NULL; rp = rp->ai_next)
+    {
+        db_socket_fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (db_socket_fd == -1)
+            continue;
+        if (connect(db_socket_fd, rp->ai_addr, rp->ai_addrlen) == 0)
+            break;
+        close(db_socket_fd);
+    }
+
+    freeaddrinfo(result);
+
+    if (rp == NULL)
+    {
+        printf("Couldn't connect to any address.\n");
+        return 1;
+    }
+
+	printf("Connected to database server at %s:%s\n", globals.db_addr, globals.db_port);
+
 	// Add database to commander globals
-	cmdGlobals.db = db;
+	cmdGlobals.db_socket_fd = db_socket_fd;
 	
 	// Start challenges container
 	table* challenges = create_table();
-	set_table_name(challenges, "challenges", 1);  // No need to lock mutex, since there's no concurrency till here
+	set_table_name(challenges, "challenges");  // No need to lock mutex, since there's no concurrency till here
 	cmdGlobals.challenges = challenges;
 	
 	// Create user to file descriptor association table
 	table* user_fds = create_table();
-	set_table_name(user_fds, "user_fds", 1);
+	set_table_name(user_fds, "user_fds");
 	cmdGlobals.user_fds = user_fds;
 
 	// Start running games container 
@@ -116,7 +155,6 @@ int main(int argc, char* argv[]) {
 			pthread_mutex_unlock(&mut_client_sockets_fd);
 		}
 		pthread_join(connectThread, NULL);
-		pthread_join(dbSaveThread, NULL);
 	}
 
 	pthread_mutex_destroy(&mut_client_sockets_fd);
@@ -273,18 +311,4 @@ void *connection_loop(void *param) {
             return (void*)(intptr_t) 1;
         }
     }
-}
-
-void *database_save_loop(void *param) {
-	database* db = ((database **)param)[0];
-
-	while (1) {
-		sleep(DATABASE_SAVE_INTERVAL);
-		printf("Saving database to disk...\n");
-		if (save_database(db, globals.db_file) != 1) {
-			printf("Error saving database to disk.\n");
-		} else {
-			printf("Database saved successfully.\n");
-		}
-	}
 }
